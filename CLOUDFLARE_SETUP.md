@@ -8,6 +8,34 @@
 
 Si ves URLs con `.workers.dev`, estás en la sección incorrecta.
 
+## ✅ Método Recomendado: Deploy Manual con Wrangler CLI
+
+Si la interfaz de Pages no está disponible o te redirige a Workers, usa el deploy manual con Wrangler CLI:
+
+### Pasos para deploy manual:
+
+1. **Build del proyecto:**
+   ```bash
+   npm run build:cloudflare
+   ```
+
+2. **Deploy a Cloudflare Pages:**
+   ```bash
+   npx wrangler pages deploy .vercel/output/static --project-name=clases-bot
+   ```
+
+3. **Configurar en Cloudflare Dashboard:**
+   - Ve a tu proyecto en Cloudflare (Workers & Pages > clases-bot)
+   - Ve a **Settings** > **Functions**
+   - Agrega el binding D1: Variable `DB`, Database `clases-db`
+   - Agrega el compatibility flag `nodejs_compat` (si es posible)
+
+**Ventajas de este método:**
+- ✅ Funciona directamente desde la terminal
+- ✅ El `wrangler.toml` ya tiene `nodejs_compat` configurado
+- ✅ No depende de la interfaz web de Cloudflare
+- ✅ Puedes automatizarlo con scripts
+
 ## ⚠️ Si tu proyecto está como Worker, créalo como Page
 
 **Si ves URLs con `.workers.dev`, tu proyecto está como Worker. Necesitas crearlo como Page:**
