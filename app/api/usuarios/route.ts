@@ -52,6 +52,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  // Usar EXACTAMENTE el mismo patrón que GET que funciona
   const envInfo = getEnvironmentInfo();
   console.log('[POST /api/usuarios] Starting request', { environment: envInfo.environment });
   
