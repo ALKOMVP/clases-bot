@@ -29,12 +29,12 @@
       "static/chunks/main-app-742812582777d1a5.js",
       "static/chunks/app/error-da8337899d981ce4.js"
     ],
-    "/api/test/route": [
+    "/api/auth/logout/route": [
       "static/chunks/webpack-5694af5a2b225c90.js",
       "static/chunks/4bd1b696-cf72ae8a39fa05aa.js",
       "static/chunks/964-13036fef2dc48ea1.js",
       "static/chunks/main-app-742812582777d1a5.js",
-      "static/chunks/app/api/test/route-697d12697d057af1.js"
+      "static/chunks/app/api/auth/logout/route-697d12697d057af1.js"
     ],
     "/api/auth/login/route": [
       "static/chunks/webpack-5694af5a2b225c90.js",
@@ -43,12 +43,12 @@
       "static/chunks/main-app-742812582777d1a5.js",
       "static/chunks/app/api/auth/login/route-697d12697d057af1.js"
     ],
-    "/api/auth/logout/route": [
+    "/api/test/route": [
       "static/chunks/webpack-5694af5a2b225c90.js",
       "static/chunks/4bd1b696-cf72ae8a39fa05aa.js",
       "static/chunks/964-13036fef2dc48ea1.js",
       "static/chunks/main-app-742812582777d1a5.js",
-      "static/chunks/app/api/auth/logout/route-697d12697d057af1.js"
+      "static/chunks/app/api/test/route-697d12697d057af1.js"
     ],
     "/api/clases/route": [
       "static/chunks/webpack-5694af5a2b225c90.js",
@@ -57,19 +57,19 @@
       "static/chunks/main-app-742812582777d1a5.js",
       "static/chunks/app/api/clases/route-697d12697d057af1.js"
     ],
-    "/api/usuarios/route": [
-      "static/chunks/webpack-5694af5a2b225c90.js",
-      "static/chunks/4bd1b696-cf72ae8a39fa05aa.js",
-      "static/chunks/964-13036fef2dc48ea1.js",
-      "static/chunks/main-app-742812582777d1a5.js",
-      "static/chunks/app/api/usuarios/route-697d12697d057af1.js"
-    ],
     "/api/reservas/route": [
       "static/chunks/webpack-5694af5a2b225c90.js",
       "static/chunks/4bd1b696-cf72ae8a39fa05aa.js",
       "static/chunks/964-13036fef2dc48ea1.js",
       "static/chunks/main-app-742812582777d1a5.js",
       "static/chunks/app/api/reservas/route-697d12697d057af1.js"
+    ],
+    "/api/usuarios/route": [
+      "static/chunks/webpack-5694af5a2b225c90.js",
+      "static/chunks/4bd1b696-cf72ae8a39fa05aa.js",
+      "static/chunks/964-13036fef2dc48ea1.js",
+      "static/chunks/main-app-742812582777d1a5.js",
+      "static/chunks/app/api/usuarios/route-697d12697d057af1.js"
     ],
     "/clases/page": [
       "static/chunks/webpack-5694af5a2b225c90.js",
