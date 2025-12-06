@@ -54,8 +54,19 @@ Después de guardar, Cloudflare redeployará automáticamente. Espera unos minut
 
 ## URL de Producción
 
-- **URL actual**: https://clases-bot.pages.dev
-- **Deploy específico**: https://bcb59d10.clases-bot.pages.dev
+Después de un build exitoso, Cloudflare Pages genera automáticamente URLs:
+
+1. **URL de producción principal**: `https://clases-bot.pages.dev` (si está configurado)
+2. **URL de preview**: Cada deployment tiene su propia URL única
+   - Formato: `https://<deployment-hash>.clases-bot.pages.dev`
+   - Ejemplo: `https://bcb59d10.clases-bot.pages.dev`
+
+**Para encontrar tu URL:**
+1. Ve a Cloudflare Dashboard > Pages > `clases-bot`
+2. Click en la pestaña **"Deployments"**
+3. Busca el deployment más reciente (debería tener un ✅ verde)
+4. Click en el deployment para ver los detalles
+5. Ahí verás la URL de preview y la URL de producción (si está configurada)
 
 ## Notas
 
