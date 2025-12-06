@@ -2,13 +2,28 @@ import { NextResponse } from 'next/server';
 
 /**
  * Detecta si estamos en Cloudflare Pages
- * Esta función no puede usar require() en edge runtime
- * Simplificada para evitar problemas de bundling
+ * Verifica si el contexto de Cloudflare está disponible
  */
 export function isCloudflareEnvironment(): boolean {
-  // En edge runtime, no podemos detectar fácilmente si estamos en Cloudflare
-  // sin usar getOptionalRequestContext, que requiere importación dinámica
-  // Por ahora, retornamos false y dejamos que las rutas API lo manejen
+  // Verificar si el contexto de Cloudflare está disponible
+  try {
+    const cloudflareContext = (globalThis as any)[Symbol.for('__cloudflare-context__')];
+    if (cloudflareContext?.env) {
+      return true;
+    }
+  } catch (e) {
+    // Si hay error accediendo al contexto, no estamos en Cloudflare
+  }
+  
+  // Fallback: verificar si estamos en un entorno de Cloudflare
+  // Cloudflare Pages siempre tiene ciertas propiedades disponibles
+  if (typeof globalThis !== 'undefined') {
+    // Verificar si hay indicadores de Cloudflare
+    if ((globalThis as any).caches || (globalThis as any).navigator?.userAgent?.includes('Cloudflare')) {
+      return true;
+    }
+  }
+  
   return false;
 }
 
@@ -17,13 +32,17 @@ export function isCloudflareEnvironment(): boolean {
  */
 export function getEnvironmentInfo() {
   const isCloudflare = isCloudflareEnvironment();
-  const isDevelopment = typeof process !== 'undefined' && process.env.NODE_ENV === 'development';
+  // En Cloudflare, NODE_ENV puede no estar definido o ser 'production'
+  // Si estamos en Cloudflare, asumimos producción a menos que haya una variable específica
+  const isDevelopment = isCloudflare 
+    ? false // En Cloudflare, siempre es producción
+    : (typeof process !== 'undefined' && process.env.NODE_ENV === 'development');
   
   return {
     environment: isCloudflare ? 'cloudflare' : 'local',
     isCloudflare,
     isDevelopment,
-    nodeEnv: typeof process !== 'undefined' ? process.env.NODE_ENV : 'unknown'
+    nodeEnv: typeof process !== 'undefined' ? process.env.NODE_ENV : (isCloudflare ? 'production' : 'unknown')
   };
 }
 
