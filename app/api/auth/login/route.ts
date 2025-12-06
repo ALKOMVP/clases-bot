@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { login, setSession } from '@/lib/auth';
 
+// Edge runtime required for Cloudflare Pages
+export const runtime = 'edge';
+
 export async function POST(request: NextRequest) {
   try {
     const { username, password } = await request.json();

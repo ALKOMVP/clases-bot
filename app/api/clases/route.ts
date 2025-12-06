@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDB } from '@/lib/db';
 
+// Edge runtime required for Cloudflare Pages
+export const runtime = 'edge';
+
 // Clases semanales fijas
 const CLASES_FIJAS = [
   // Lunes
