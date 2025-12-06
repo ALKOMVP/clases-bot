@@ -27,7 +27,7 @@ import { getMockDBInstance } from './db-mock';
 
 // Helper para obtener la base de datos
 // En desarrollo local con wrangler pages dev, la DB está disponible en process.env.DB
-// En producción en Cloudflare Pages, la DB estará disponible en process.env.DB cuando el binding está configurado
+// En producción en Cloudflare Pages, la DB está disponible a través de getRequestContext().env.DB
 export function getDB(env?: { DB?: D1Database }): D1Database | null {
   // Primero intentar obtener de env.DB (pasado como parámetro)
   if (env?.DB) {
@@ -45,29 +45,15 @@ export function getDB(env?: { DB?: D1Database }): D1Database | null {
   }
   
   // Para producción en Cloudflare Pages (Edge runtime)
-  // El binding D1 está disponible en process.env.DB cuando está configurado en Cloudflare Pages
-  // Intentar múltiples formas de acceso para compatibilidad
+  // El binding D1 se obtiene a través de getRequestContext().env.DB en las rutas API
+  // Este helper solo se usa como fallback
+  
+  // Fallback: intentar process.env.DB (puede funcionar en algunos casos)
   if (typeof process !== 'undefined') {
-    // Primero intentar process.env.DB (forma estándar)
     const db = (process.env as any).DB;
     if (db) {
       return db;
     }
-    
-    // Intentar a través de globalThis (algunas versiones de next-on-pages)
-    if (typeof globalThis !== 'undefined' && (globalThis as any).DB) {
-      return (globalThis as any).DB;
-    }
-    
-    // Intentar a través de global (Node.js compatibility)
-    if (typeof global !== 'undefined' && (global as any).DB) {
-      return (global as any).DB;
-    }
-  }
-  
-  // Si estamos en Edge runtime y no hay process, intentar obtener del contexto global
-  if (typeof globalThis !== 'undefined' && (globalThis as any).DB) {
-    return (globalThis as any).DB;
   }
   
   return null;
