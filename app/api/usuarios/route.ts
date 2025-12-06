@@ -1,34 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getOptionalRequestContext } from '@cloudflare/next-on-pages';
-import { getDB } from '@/lib/db';
+import { getDB, getDBFromContext } from '@/lib/db';
+import { getMockDBInstance } from '@/lib/db-mock';
 
 // Edge runtime required for Cloudflare Pages
 export const runtime = 'edge';
 
 export async function GET(request: NextRequest) {
   try {
-    console.log('GET /api/usuarios - Iniciando request');
-    // En Cloudflare Pages, el binding D1 está disponible a través de getOptionalRequestContext().env.DB
-    const context = getOptionalRequestContext();
-    console.log('GET /api/usuarios - Context:', {
-      hasContext: !!context,
-      hasEnv: !!context?.env,
-      envKeys: context?.env ? Object.keys(context.env) : []
-    });
-    const db = context?.env && (context.env as any).DB
-      ? getDB({ DB: (context.env as any).DB })
-      : getDB();
-    console.log('GET /api/usuarios - DB:', !!db);
+    // Intentar obtener la BD del contexto de Cloudflare
+    let db = getDBFromContext();
+    
+    // Si no hay BD del contexto, usar mock en desarrollo o devolver array vacío en producción
     if (!db) {
-      console.error('GET usuarios: DB not available', {
-        hasContext: !!context,
-        hasEnv: !!context?.env,
-        hasDB: !!(context?.env && (context.env as any).DB),
-        envKeys: context?.env ? Object.keys(context.env) : []
-      });
-      return NextResponse.json({ 
-        error: 'Database not available. Please configure D1 binding in Cloudflare Pages dashboard.' 
-      }, { status: 500 });
+      if (typeof process !== 'undefined' && process.env.NODE_ENV === 'development') {
+        db = getMockDBInstance();
+      } else {
+        // En producción sin BD, devolver array vacío para evitar 500
+        console.warn('GET usuarios: DB not available, returning empty array');
+        return NextResponse.json([]);
+      }
     }
 
     const { searchParams } = new URL(request.url);
@@ -59,15 +49,16 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    // En Cloudflare Pages, el binding D1 está disponible a través de getOptionalRequestContext().env.DB
-    const context = getOptionalRequestContext();
-    const db = context?.env && (context.env as any).DB
-      ? getDB({ DB: (context.env as any).DB })
-      : getDB();
+    let db = getDBFromContext();
+    
     if (!db) {
-      return NextResponse.json({ 
-        error: 'Database not available. Please configure D1 binding in Cloudflare Pages dashboard.' 
-      }, { status: 500 });
+      if (typeof process !== 'undefined' && process.env.NODE_ENV === 'development') {
+        db = getMockDBInstance();
+      } else {
+        return NextResponse.json({ 
+          error: 'Database not available. Please configure D1 binding in Cloudflare Pages dashboard.' 
+        }, { status: 500 });
+      }
     }
 
     const { nombre, apellido, email, fecha_alta } = await request.json();
@@ -102,15 +93,16 @@ export async function POST(request: NextRequest) {
 
 export async function PUT(request: NextRequest) {
   try {
-    // En Cloudflare Pages, el binding D1 está disponible a través de getOptionalRequestContext().env.DB
-    const context = getOptionalRequestContext();
-    const db = context?.env && (context.env as any).DB
-      ? getDB({ DB: (context.env as any).DB })
-      : getDB();
+    let db = getDBFromContext();
+    
     if (!db) {
-      return NextResponse.json({ 
-        error: 'Database not available. Please configure D1 binding in Cloudflare Pages dashboard.' 
-      }, { status: 500 });
+      if (typeof process !== 'undefined' && process.env.NODE_ENV === 'development') {
+        db = getMockDBInstance();
+      } else {
+        return NextResponse.json({ 
+          error: 'Database not available. Please configure D1 binding in Cloudflare Pages dashboard.' 
+        }, { status: 500 });
+      }
     }
 
     const { id, nombre, apellido, email, fecha_alta } = await request.json();
@@ -132,15 +124,16 @@ export async function PUT(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
-    // En Cloudflare Pages, el binding D1 está disponible a través de getOptionalRequestContext().env.DB
-    const context = getOptionalRequestContext();
-    const db = context?.env && (context.env as any).DB
-      ? getDB({ DB: (context.env as any).DB })
-      : getDB();
+    let db = getDBFromContext();
+    
     if (!db) {
-      return NextResponse.json({ 
-        error: 'Database not available. Please configure D1 binding in Cloudflare Pages dashboard.' 
-      }, { status: 500 });
+      if (typeof process !== 'undefined' && process.env.NODE_ENV === 'development') {
+        db = getMockDBInstance();
+      } else {
+        return NextResponse.json({ 
+          error: 'Database not available. Please configure D1 binding in Cloudflare Pages dashboard.' 
+        }, { status: 500 });
+      }
     }
 
     const { searchParams } = new URL(request.url);

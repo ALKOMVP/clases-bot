@@ -25,9 +25,12 @@ type D1Database = any;
 
 import { getMockDBInstance } from './db-mock';
 
+// Importar getOptionalRequestContext estáticamente
+// En edge runtime, esto funcionará si está disponible
+import { getOptionalRequestContext } from '@cloudflare/next-on-pages';
+
 // Helper para obtener la base de datos
-// En desarrollo local con wrangler pages dev, la DB está disponible en process.env.DB
-// En producción en Cloudflare Pages, la DB está disponible a través de getRequestContext().env.DB
+// Intenta múltiples formas de acceder a la BD para máxima compatibilidad
 export function getDB(env?: { DB?: D1Database }): D1Database | null {
   // Primero intentar obtener de env.DB (pasado como parámetro)
   if (env?.DB) {
@@ -44,16 +47,34 @@ export function getDB(env?: { DB?: D1Database }): D1Database | null {
     return getMockDBInstance() as any;
   }
   
-  // Para producción en Cloudflare Pages (Edge runtime)
-  // El binding D1 se obtiene a través de getRequestContext().env.DB en las rutas API
-  // Este helper solo se usa como fallback
-  
   // Fallback: intentar process.env.DB (puede funcionar en algunos casos)
   if (typeof process !== 'undefined') {
     const db = (process.env as any).DB;
     if (db) {
       return db;
     }
+  }
+  
+  return null;
+}
+
+// Helper para obtener la BD desde el contexto de Cloudflare
+// Esta función debe ser llamada dentro de las rutas API
+export function getDBFromContext(): D1Database | null {
+  try {
+    // Intentar obtener del contexto de Cloudflare
+    const context = getOptionalRequestContext();
+    if (context?.env && (context.env as any).DB) {
+      return (context.env as any).DB;
+    }
+  } catch (e) {
+    // getOptionalRequestContext no está disponible o falló
+    // Esto es normal en desarrollo local
+  }
+  
+  // Fallback a process.env.DB
+  if (typeof process !== 'undefined' && (process.env as any).DB) {
+    return (process.env as any).DB;
   }
   
   return null;
