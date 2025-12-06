@@ -6,9 +6,9 @@
   "/api/reservas/route": "/api/reservas",
   "/api/clases/route": "/api/clases",
   "/api/usuarios/route": "/api/usuarios",
-  "/clases/page": "/clases",
   "/login/page": "/login",
+  "/clases/page": "/clases",
+  "/page": "/",
   "/reservas/page": "/reservas",
-  "/usuarios/page": "/usuarios",
-  "/page": "/"
+  "/usuarios/page": "/usuarios"
 }

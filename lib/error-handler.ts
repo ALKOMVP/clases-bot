@@ -61,11 +61,12 @@ export function createErrorResponse(
   let userMessage = defaultMessage;
   let technicalDetails: string | undefined = undefined;
 
-  // Errores de base de datos
-  if (errorMessage.includes('Database not available') || 
-      errorMessage.includes('DB not available') ||
-      errorMessage.includes('D1') ||
-      errorMessage.includes('binding')) {
+  // Errores de base de datos - solo si el mensaje es explícitamente sobre DB no disponible
+  // No detectar errores genéricos que contengan "DB" o "Database" en el mensaje
+  if (errorMessage === 'Database not available' || 
+      errorMessage === 'DB not available' ||
+      (errorMessage.includes('D1') && errorMessage.includes('not available')) ||
+      (errorMessage.includes('binding') && errorMessage.includes('not found'))) {
     statusCode = 503; // Service Unavailable
     userMessage = 'Base de datos no disponible';
     technicalDetails = envInfo.isCloudflare 
