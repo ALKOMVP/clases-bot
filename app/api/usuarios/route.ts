@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getDB, getDBFromContext } from '@/lib/db';
+import { getOptionalRequestContext } from '@cloudflare/next-on-pages';
+import { getDB } from '@/lib/db';
 import { getMockDBInstance } from '@/lib/db-mock';
 
 // Edge runtime required for Cloudflare Pages
@@ -8,9 +9,23 @@ export const runtime = 'edge';
 export async function GET(request: NextRequest) {
   try {
     // Intentar obtener la BD del contexto de Cloudflare
-    let db = getDBFromContext();
+    let db: any = null;
     
-    // Si no hay BD del contexto, usar mock en desarrollo o devolver array vacío en producción
+    try {
+      const context = getOptionalRequestContext();
+      if (context?.env && (context.env as any).DB) {
+        db = (context.env as any).DB;
+      }
+    } catch (e) {
+      // getOptionalRequestContext no está disponible
+    }
+    
+    // Si no hay BD del contexto, intentar process.env.DB
+    if (!db && typeof process !== 'undefined' && (process.env as any).DB) {
+      db = (process.env as any).DB;
+    }
+    
+    // Si no hay BD, usar mock en desarrollo o devolver array vacío en producción
     if (!db) {
       if (typeof process !== 'undefined' && process.env.NODE_ENV === 'development') {
         db = getMockDBInstance();
@@ -49,7 +64,20 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    let db = getDBFromContext();
+    let db: any = null;
+    
+    try {
+      const context = getOptionalRequestContext();
+      if (context?.env && (context.env as any).DB) {
+        db = (context.env as any).DB;
+      }
+    } catch (e) {
+      // getOptionalRequestContext no está disponible
+    }
+    
+    if (!db && typeof process !== 'undefined' && (process.env as any).DB) {
+      db = (process.env as any).DB;
+    }
     
     if (!db) {
       if (typeof process !== 'undefined' && process.env.NODE_ENV === 'development') {
@@ -93,7 +121,20 @@ export async function POST(request: NextRequest) {
 
 export async function PUT(request: NextRequest) {
   try {
-    let db = getDBFromContext();
+    let db: any = null;
+    
+    try {
+      const context = getOptionalRequestContext();
+      if (context?.env && (context.env as any).DB) {
+        db = (context.env as any).DB;
+      }
+    } catch (e) {
+      // getOptionalRequestContext no está disponible
+    }
+    
+    if (!db && typeof process !== 'undefined' && (process.env as any).DB) {
+      db = (process.env as any).DB;
+    }
     
     if (!db) {
       if (typeof process !== 'undefined' && process.env.NODE_ENV === 'development') {
@@ -124,7 +165,20 @@ export async function PUT(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
-    let db = getDBFromContext();
+    let db: any = null;
+    
+    try {
+      const context = getOptionalRequestContext();
+      if (context?.env && (context.env as any).DB) {
+        db = (context.env as any).DB;
+      }
+    } catch (e) {
+      // getOptionalRequestContext no está disponible
+    }
+    
+    if (!db && typeof process !== 'undefined' && (process.env as any).DB) {
+      db = (process.env as any).DB;
+    }
     
     if (!db) {
       if (typeof process !== 'undefined' && process.env.NODE_ENV === 'development') {
