@@ -69,12 +69,21 @@ export async function POST(request: NextRequest) {
     if (!db) {
       // Si no hay DB disponible, usar mock como fallback
       db = getMockDBInstance();
-      console.log('[POST /api/usuarios] Using mock DB as fallback');
+      console.log('[POST /api/usuarios] Using mock DB as fallback', { 
+        hasMockDB: !!db,
+        mockDBType: typeof db,
+        hasPrepare: typeof db?.prepare === 'function'
+      });
     }
     
     // Verificar que la DB esté disponible (ya sea real o mock)
-    if (!db) {
-      return NextResponse.json({ error: 'Base de datos no disponible' }, { status: 503 });
+    if (!db || typeof db.prepare !== 'function') {
+      console.error('[POST /api/usuarios] DB is invalid', { 
+        hasDB: !!db,
+        dbType: typeof db,
+        hasPrepare: typeof db?.prepare === 'function'
+      });
+      return NextResponse.json({ error: 'Database not available' }, { status: 503 });
     }
 
     const body = await request.json();
