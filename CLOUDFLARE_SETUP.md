@@ -1,14 +1,37 @@
 # Configuración de Cloudflare Pages
 
-## Pasos Requeridos en el Dashboard
+## Opción Recomendada: Conectar desde GitHub
+
+La forma más fácil de configurar todo automáticamente es conectar el proyecto desde GitHub:
+
+1. Ve a [Cloudflare Dashboard](https://dash.cloudflare.com) > **Pages**
+2. Click en **"Create a project"** > **"Connect to Git"**
+3. Selecciona **GitHub** y autoriza el acceso
+4. Selecciona el repositorio: `ALKOMVP/clases-bot`
+5. Configura el build:
+   - **Framework preset**: Next.js (o None)
+   - **Build command**: `npm run build:cloudflare`
+   - **Build output directory**: `.vercel/output/static`
+   - **Root directory**: `/` (dejar vacío)
+6. En **"Environment variables"**: No necesitas agregar nada
+7. Click en **"Save and Deploy"**
+
+Cloudflare leerá automáticamente el `wrangler.toml` y configurará:
+- ✅ Compatibility flags (`nodejs_compat`)
+- ✅ D1 database bindings
+
+## Opción Manual: Configurar en el Dashboard
+
+Si prefieres configurar manualmente:
 
 ### 1. Configurar Compatibility Flags
 
 1. Ve a [Cloudflare Dashboard](https://dash.cloudflare.com) > **Pages** > **clases-bot**
 2. Click en **Settings** > **Functions**
 3. En la sección **"Compatibility Flags"**:
-   - Agrega `nodejs_compat` para **Production**
-   - Agrega `nodejs_compat` para **Preview**
+   - Si hay un campo de texto (no solo dropdown), escribe manualmente: `nodejs_compat`
+   - Si solo hay dropdown, busca la opción que diga "nodejs" o similar
+   - Agrega para **Production** y **Preview**
 4. Click en **Save**
 
 ### 2. Configurar D1 Database Binding
