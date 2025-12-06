@@ -2,17 +2,14 @@ import { NextResponse } from 'next/server';
 
 /**
  * Detecta si estamos en Cloudflare Pages
- * Usa importación dinámica para evitar errores en build time
+ * Esta función no puede usar require() en edge runtime
+ * Simplificada para evitar problemas de bundling
  */
 export function isCloudflareEnvironment(): boolean {
-  try {
-    // Importación dinámica para evitar errores en build
-    const { getOptionalRequestContext } = require('@cloudflare/next-on-pages');
-    const context = getOptionalRequestContext();
-    return !!context?.env;
-  } catch {
-    return false;
-  }
+  // En edge runtime, no podemos detectar fácilmente si estamos en Cloudflare
+  // sin usar getOptionalRequestContext, que requiere importación dinámica
+  // Por ahora, retornamos false y dejamos que las rutas API lo manejen
+  return false;
 }
 
 /**

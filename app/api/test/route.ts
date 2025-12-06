@@ -1,14 +1,13 @@
-import { NextResponse } from 'next/server';
-
-// Edge runtime required for Cloudflare Pages
 export const runtime = 'edge';
 
-// Versión ultra-simple: devolver texto plano
 export async function GET() {
-  return new NextResponse('API works!', {
+  return new Response(JSON.stringify({ 
+    message: 'API works!', 
+    timestamp: Date.now() 
+  }), {
     status: 200,
     headers: {
-      'Content-Type': 'text/plain',
+      'Content-Type': 'application/json',
     },
   });
 }
