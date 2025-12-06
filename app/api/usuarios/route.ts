@@ -1,18 +1,125 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getDB } from '@/lib/db';
 import { getMockDBInstance } from '@/lib/db-mock';
 import { createErrorResponse, checkDatabaseAvailability, getEnvironmentInfo } from '@/lib/error-handler';
 
-// Edge runtime required for Cloudflare Pages
-export const runtime = 'edge';
+// OpenNext no requiere runtime = 'edge' explícito
 
 export async function GET(request: NextRequest) {
   const envInfo = getEnvironmentInfo();
   console.log('[GET /api/usuarios] Starting request', { environment: envInfo.environment });
   
+  try {
+    // En OpenNext, los bindings están disponibles a través de process.env.DB
+    let db: any = null;
+    
+    if (typeof process !== 'undefined' && (process.env as any).DB) {
+      db = (process.env as any).DB;
+      console.log('[GET /api/usuarios] DB obtained from process.env');
     }
     
-    if (!db && typeof process !== 'undefined' && (process.env as any).DB) {
+    if (!db) {
+      if (typeof process !== 'undefined' && process.env.NODE_ENV === 'development') {
+        db = getMockDBInstance();
+        console.log('[GET /api/usuarios] Using mock DB (development)');
+      } else {
+        console.warn('[GET /api/usuarios] DB not available, returning empty array');
+        return NextResponse.json([]);
+      }
+    }
+    
+    const dbCheck = checkDatabaseAvailability(db, '/api/usuarios');
+    if (!dbCheck.available && dbCheck.error) {
+      return dbCheck.error;
+    }
+
+    const { searchParams } = new URL(request.url);
+    const id = searchParams.get('id');
+
+    if (id) {
+      const result = await db.prepare('SELECT * FROM usuario WHERE id = ?').bind(id).first();
+      return NextResponse.json(result);
+    }
+
+    const result = await db.prepare('SELECT * FROM usuario ORDER BY apellido, nombre').all();
+    const usuarios = (result?.results || []) as any[];
+    
+    console.log('[GET /api/usuarios] Success', { count: usuarios.length });
+    return NextResponse.json(Array.isArray(usuarios) ? usuarios : []);
+  } catch (error: any) {
+    return createErrorResponse(
+      error,
+      'Error al obtener usuarios',
+      { route: '/api/usuarios', method: 'GET', operation: 'fetch_usuarios' }
+    );
+  }
+}
+
+export async function POST(request: NextRequest) {
+  const envInfo = getEnvironmentInfo();
+  console.log('[POST /api/usuarios] Starting request', { environment: envInfo.environment });
+  
+  try {
+    // En OpenNext, los bindings están disponibles a través de process.env.DB
+    let db: any = null;
+    
+    if (typeof process !== 'undefined' && (process.env as any).DB) {
+      db = (process.env as any).DB;
+      console.log('[POST /api/usuarios] DB obtained from process.env');
+    }
+    
+    if (!db) {
+      if (typeof process !== 'undefined' && process.env.NODE_ENV === 'development') {
+        db = getMockDBInstance();
+        console.log('[POST /api/usuarios] Using mock DB (development)');
+      } else {
+        const dbCheck = checkDatabaseAvailability(db, '/api/usuarios');
+        if (dbCheck.error) return dbCheck.error;
+        return NextResponse.json([]);
+      }
+    }
+    
+    const dbCheck = checkDatabaseAvailability(db, '/api/usuarios');
+    if (!dbCheck.available && dbCheck.error) {
+      return dbCheck.error;
+    }
+
+    const { nombre, apellido, email, fecha_alta } = await request.json();
+
+    if (!nombre || !apellido || !email) {
+      return NextResponse.json({ error: 'Faltan campos requeridos' }, { status: 400 });
+    }
+
+    const result = await db.prepare(
+      'INSERT INTO usuario (nombre, apellido, email, fecha_alta) VALUES (?, ?, ?, ?)'
+    ).bind(nombre, apellido, email, fecha_alta || null).run();
+    
+    const lastRowId = result && typeof result === 'object' 
+      ? (result as any).meta?.last_row_id || (result as any).last_row_id
+      : null;
+
+    console.log('[POST /api/usuarios] Success', { id: lastRowId });
+    return NextResponse.json({ success: true, id: lastRowId });
+  } catch (error: any) {
+    if (error.message?.includes('UNIQUE constraint')) {
+      return NextResponse.json({ error: 'El email ya existe' }, { status: 400 });
+    }
+    return createErrorResponse(
+      error,
+      'Error al crear usuario',
+      { route: '/api/usuarios', method: 'POST', operation: 'create_usuario' }
+    );
+  }
+}
+
+export async function PUT(request: NextRequest) {
+  const envInfo = getEnvironmentInfo();
+  console.log('[PUT /api/usuarios] Starting request', { environment: envInfo.environment });
+  
+  try {
+    // En OpenNext, los bindings están disponibles a través de process.env.DB
+    let db: any = null;
+    
+    if (typeof process !== 'undefined' && (process.env as any).DB) {
       db = (process.env as any).DB;
       console.log('[PUT /api/usuarios] DB obtained from process.env');
     }
@@ -24,6 +131,7 @@ export async function GET(request: NextRequest) {
       } else {
         const dbCheck = checkDatabaseAvailability(db, '/api/usuarios');
         if (dbCheck.error) return dbCheck.error;
+        return NextResponse.json([]);
       }
     }
     
@@ -57,9 +165,11 @@ export async function DELETE(request: NextRequest) {
   const envInfo = getEnvironmentInfo();
   console.log('[DELETE /api/usuarios] Starting request', { environment: envInfo.environment });
   
-    }
+  try {
+    // En OpenNext, los bindings están disponibles a través de process.env.DB
+    let db: any = null;
     
-    if (!db && typeof process !== 'undefined' && (process.env as any).DB) {
+    if (typeof process !== 'undefined' && (process.env as any).DB) {
       db = (process.env as any).DB;
       console.log('[DELETE /api/usuarios] DB obtained from process.env');
     }
@@ -71,6 +181,7 @@ export async function DELETE(request: NextRequest) {
       } else {
         const dbCheck = checkDatabaseAvailability(db, '/api/usuarios');
         if (dbCheck.error) return dbCheck.error;
+        return NextResponse.json([]);
       }
     }
     

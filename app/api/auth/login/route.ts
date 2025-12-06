@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { login, setSessionCookie } from '@/lib/auth';
 
 // Edge runtime required for Cloudflare Pages
-export const runtime = 'edge';
 
 export async function POST(request: NextRequest) {
   console.log('[LOGIN] POST /api/auth/login - Starting');

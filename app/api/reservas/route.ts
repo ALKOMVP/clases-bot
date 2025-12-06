@@ -1,18 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getDB } from '@/lib/db';
 import { getMockDBInstance } from '@/lib/db-mock';
 import { createErrorResponse, checkDatabaseAvailability, getEnvironmentInfo } from '@/lib/error-handler';
 
-// Edge runtime required for Cloudflare Pages
-export const runtime = 'edge';
+// OpenNext no requiere runtime = 'edge' explícito
 
 export async function GET(request: NextRequest) {
   const envInfo = getEnvironmentInfo();
   console.log('[GET /api/reservas] Starting request', { environment: envInfo.environment });
   
-    }
+  try {
+    // En OpenNext, los bindings están disponibles a través de process.env.DB
+    let db: any = null;
     
-    if (!db && typeof process !== 'undefined' && (process.env as any).DB) {
+    if (typeof process !== 'undefined' && (process.env as any).DB) {
       db = (process.env as any).DB;
       console.log('[GET /api/reservas] DB obtained from process.env');
     }
@@ -92,9 +92,11 @@ export async function POST(request: NextRequest) {
   const envInfo = getEnvironmentInfo();
   console.log('[POST /api/reservas] Starting request', { environment: envInfo.environment });
   
-    }
+  try {
+    // En OpenNext, los bindings están disponibles a través de process.env.DB
+    let db: any = null;
     
-    if (!db && typeof process !== 'undefined' && (process.env as any).DB) {
+    if (typeof process !== 'undefined' && (process.env as any).DB) {
       db = (process.env as any).DB;
       console.log('[POST /api/reservas] DB obtained from process.env');
     }
@@ -140,9 +142,11 @@ export async function DELETE(request: NextRequest) {
   const envInfo = getEnvironmentInfo();
   console.log('[DELETE /api/reservas] Starting request', { environment: envInfo.environment });
   
-    }
+  try {
+    // En OpenNext, los bindings están disponibles a través de process.env.DB
+    let db: any = null;
     
-    if (!db && typeof process !== 'undefined' && (process.env as any).DB) {
+    if (typeof process !== 'undefined' && (process.env as any).DB) {
       db = (process.env as any).DB;
       console.log('[DELETE /api/reservas] DB obtained from process.env');
     }
