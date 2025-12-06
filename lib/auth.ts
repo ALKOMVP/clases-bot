@@ -1,4 +1,4 @@
-import { cookies } from 'next/headers';
+import { NextRequest, NextResponse } from 'next/server';
 
 const USERNAME = 'yoga';
 const PASSWORD = 'yoga';
@@ -8,24 +8,23 @@ export async function login(username: string, password: string): Promise<boolean
   return username === USERNAME && password === PASSWORD;
 }
 
-export async function isAuthenticated(): Promise<boolean> {
-  const cookieStore = await cookies();
-  const session = cookieStore.get(SESSION_COOKIE);
+export function isAuthenticated(request: NextRequest): boolean {
+  const session = request.cookies.get(SESSION_COOKIE);
   return session?.value === 'authenticated';
 }
 
-export async function setSession() {
-  const cookieStore = await cookies();
-  cookieStore.set(SESSION_COOKIE, 'authenticated', {
+export function setSessionCookie(response: NextResponse): NextResponse {
+  response.cookies.set(SESSION_COOKIE, 'authenticated', {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'lax',
     maxAge: 60 * 60 * 24 * 7, // 7 días
   });
+  return response;
 }
 
-export async function clearSession() {
-  const cookieStore = await cookies();
-  cookieStore.delete(SESSION_COOKIE);
+export function clearSessionCookie(response: NextResponse): NextResponse {
+  response.cookies.delete(SESSION_COOKIE);
+  return response;
 }
 

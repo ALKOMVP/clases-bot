@@ -1,9 +1,10 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
+import { isAuthenticated } from '@/lib/auth';
 
 export function middleware(request: NextRequest) {
   try {
-    const session = request.cookies.get('yoga_session');
+    const authenticated = isAuthenticated(request);
     const isLoginPage = request.nextUrl.pathname === '/login';
     const isApiRoute = request.nextUrl.pathname.startsWith('/api');
     
@@ -13,12 +14,12 @@ export function middleware(request: NextRequest) {
     }
     
     // Si no está autenticado y no está en login, redirigir a login
-    if (!session && !isLoginPage) {
+    if (!authenticated && !isLoginPage) {
       return NextResponse.redirect(new URL('/login', request.url));
     }
     
     // Si está autenticado y está en login, redirigir a home
-    if (session && isLoginPage) {
+    if (authenticated && isLoginPage) {
       return NextResponse.redirect(new URL('/', request.url));
     }
     

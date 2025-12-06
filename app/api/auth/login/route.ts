@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { login, setSession } from '@/lib/auth';
+import { login, setSessionCookie } from '@/lib/auth';
 
 // Edge runtime required for Cloudflare Pages
 export const runtime = 'edge';
@@ -11,8 +11,8 @@ export async function POST(request: NextRequest) {
     const isValid = await login(username, password);
     
     if (isValid) {
-      await setSession();
-      return NextResponse.json({ success: true });
+      const response = NextResponse.json({ success: true });
+      return setSessionCookie(response);
     } else {
       return NextResponse.json(
         { error: 'Credenciales inválidas' },
@@ -20,6 +20,7 @@ export async function POST(request: NextRequest) {
       );
     }
   } catch (error) {
+    console.error('Login error:', error);
     return NextResponse.json(
       { error: 'Error en el servidor' },
       { status: 500 }
