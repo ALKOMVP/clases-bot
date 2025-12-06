@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getRequestContext } from '@cloudflare/next-on-pages';
+import { getOptionalRequestContext } from '@cloudflare/next-on-pages';
 import { getDB } from '@/lib/db';
 
 // Edge runtime required for Cloudflare Pages
@@ -7,17 +7,18 @@ export const runtime = 'edge';
 
 export async function GET(request: NextRequest) {
   try {
-    // En Cloudflare Pages, el binding D1 está disponible a través de getRequestContext().env.DB
-    let db: any = null;
-    try {
-      const { env } = getRequestContext();
-      db = getDB({ DB: (env as any).DB });
-    } catch (e) {
-      // Si getRequestContext no está disponible (desarrollo local), usar fallback
-      db = getDB();
-    }
+    // En Cloudflare Pages, el binding D1 está disponible a través de getOptionalRequestContext().env.DB
+    const context = getOptionalRequestContext();
+    const db = context?.env && (context.env as any).DB
+      ? getDB({ DB: (context.env as any).DB })
+      : getDB();
     if (!db) {
-      console.error('GET usuarios: DB not available. Make sure D1 binding is configured in Cloudflare Pages dashboard (Settings > Functions > D1 database bindings)');
+      console.error('GET usuarios: DB not available', {
+        hasContext: !!context,
+        hasEnv: !!context?.env,
+        hasDB: !!(context?.env && (context.env as any).DB),
+        envKeys: context?.env ? Object.keys(context.env) : []
+      });
       return NextResponse.json({ 
         error: 'Database not available. Please configure D1 binding in Cloudflare Pages dashboard.' 
       }, { status: 500 });
@@ -43,14 +44,11 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    // En Cloudflare Pages, el binding D1 está disponible a través de getRequestContext().env.DB
-    let db: any = null;
-    try {
-      const { env } = getRequestContext();
-      db = getDB({ DB: (env as any).DB });
-    } catch (e) {
-      db = getDB();
-    }
+    // En Cloudflare Pages, el binding D1 está disponible a través de getOptionalRequestContext().env.DB
+    const context = getOptionalRequestContext();
+    const db = context?.env && (context.env as any).DB
+      ? getDB({ DB: (context.env as any).DB })
+      : getDB();
     if (!db) {
       return NextResponse.json({ 
         error: 'Database not available. Please configure D1 binding in Cloudflare Pages dashboard.' 
@@ -89,14 +87,11 @@ export async function POST(request: NextRequest) {
 
 export async function PUT(request: NextRequest) {
   try {
-    // En Cloudflare Pages, el binding D1 está disponible a través de getRequestContext().env.DB
-    let db: any = null;
-    try {
-      const { env } = getRequestContext();
-      db = getDB({ DB: (env as any).DB });
-    } catch (e) {
-      db = getDB();
-    }
+    // En Cloudflare Pages, el binding D1 está disponible a través de getOptionalRequestContext().env.DB
+    const context = getOptionalRequestContext();
+    const db = context?.env && (context.env as any).DB
+      ? getDB({ DB: (context.env as any).DB })
+      : getDB();
     if (!db) {
       return NextResponse.json({ 
         error: 'Database not available. Please configure D1 binding in Cloudflare Pages dashboard.' 
@@ -122,14 +117,11 @@ export async function PUT(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
-    // En Cloudflare Pages, el binding D1 está disponible a través de getRequestContext().env.DB
-    let db: any = null;
-    try {
-      const { env } = getRequestContext();
-      db = getDB({ DB: (env as any).DB });
-    } catch (e) {
-      db = getDB();
-    }
+    // En Cloudflare Pages, el binding D1 está disponible a través de getOptionalRequestContext().env.DB
+    const context = getOptionalRequestContext();
+    const db = context?.env && (context.env as any).DB
+      ? getDB({ DB: (context.env as any).DB })
+      : getDB();
     if (!db) {
       return NextResponse.json({ 
         error: 'Database not available. Please configure D1 binding in Cloudflare Pages dashboard.' 

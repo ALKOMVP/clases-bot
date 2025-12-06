@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getRequestContext } from '@cloudflare/next-on-pages';
+import { getOptionalRequestContext } from '@cloudflare/next-on-pages';
 import { getDB } from '@/lib/db';
 
 // Edge runtime required for Cloudflare Pages
@@ -26,14 +26,11 @@ const CLASES_FIJAS = [
 
 export async function GET(request: NextRequest) {
   try {
-    // En Cloudflare Pages, el binding D1 está disponible a través de getRequestContext().env.DB
-    let db: any = null;
-    try {
-      const { env } = getRequestContext();
-      db = getDB({ DB: (env as any).DB });
-    } catch (e) {
-      db = getDB();
-    }
+    // En Cloudflare Pages, el binding D1 está disponible a través de getOptionalRequestContext().env.DB
+    const context = getOptionalRequestContext();
+    const db = context?.env && (context.env as any).DB
+      ? getDB({ DB: (context.env as any).DB })
+      : getDB();
     if (!db) {
       return NextResponse.json({ 
         error: 'Database not available. Please configure D1 binding in Cloudflare Pages dashboard.' 
@@ -72,14 +69,11 @@ export async function GET(request: NextRequest) {
 // Endpoint para crear una clase individual o inicializar las clases fijas
 export async function POST(request: NextRequest) {
   try {
-    // En Cloudflare Pages, el binding D1 está disponible a través de getRequestContext().env.DB
-    let db: any = null;
-    try {
-      const { env } = getRequestContext();
-      db = getDB({ DB: (env as any).DB });
-    } catch (e) {
-      db = getDB();
-    }
+    // En Cloudflare Pages, el binding D1 está disponible a través de getOptionalRequestContext().env.DB
+    const context = getOptionalRequestContext();
+    const db = context?.env && (context.env as any).DB
+      ? getDB({ DB: (context.env as any).DB })
+      : getDB();
     if (!db) {
       return NextResponse.json({ 
         error: 'Database not available. Please configure D1 binding in Cloudflare Pages dashboard.' 
@@ -139,14 +133,11 @@ export async function POST(request: NextRequest) {
 // Endpoint para eliminar una clase
 export async function DELETE(request: NextRequest) {
   try {
-    // En Cloudflare Pages, el binding D1 está disponible a través de getRequestContext().env.DB
-    let db: any = null;
-    try {
-      const { env } = getRequestContext();
-      db = getDB({ DB: (env as any).DB });
-    } catch (e) {
-      db = getDB();
-    }
+    // En Cloudflare Pages, el binding D1 está disponible a través de getOptionalRequestContext().env.DB
+    const context = getOptionalRequestContext();
+    const db = context?.env && (context.env as any).DB
+      ? getDB({ DB: (context.env as any).DB })
+      : getDB();
     if (!db) {
       return NextResponse.json({ 
         error: 'Database not available. Please configure D1 binding in Cloudflare Pages dashboard.' 
