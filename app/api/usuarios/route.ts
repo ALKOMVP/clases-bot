@@ -9,12 +9,13 @@ export async function GET(request: NextRequest) {
   console.log('[GET /api/usuarios] Starting request', { environment: envInfo.environment });
   
   try {
-    // En OpenNext, los bindings están disponibles a través de process.env.DB
+    // En OpenNext, los bindings están disponibles a través del contexto de Cloudflare
     let db: any = null;
     
-    if (typeof process !== 'undefined' && (process.env as any).DB) {
-      db = (process.env as any).DB;
-      console.log('[GET /api/usuarios] DB obtained from process.env');
+    const cloudflareContext = (globalThis as any)[Symbol.for('__cloudflare-context__')];
+    if (cloudflareContext?.env?.DB) {
+      db = cloudflareContext.env.DB;
+      console.log('[GET /api/usuarios] DB obtained from Cloudflare context (OpenNext)');
     }
     
     if (!db) {
@@ -59,12 +60,13 @@ export async function POST(request: NextRequest) {
   console.log('[POST /api/usuarios] Starting request', { environment: envInfo.environment });
   
   try {
-    // En OpenNext, los bindings están disponibles a través de process.env.DB
+    // En OpenNext, los bindings están disponibles a través del contexto de Cloudflare
     let db: any = null;
     
-    if (typeof process !== 'undefined' && (process.env as any).DB) {
-      db = (process.env as any).DB;
-      console.log('[POST /api/usuarios] DB obtained from process.env');
+    const cloudflareContext = (globalThis as any)[Symbol.for('__cloudflare-context__')];
+    if (cloudflareContext?.env?.DB) {
+      db = cloudflareContext.env.DB;
+      console.log('[POST /api/usuarios] DB obtained from Cloudflare context (OpenNext)');
     }
     
     if (!db) {
@@ -116,12 +118,13 @@ export async function PUT(request: NextRequest) {
   console.log('[PUT /api/usuarios] Starting request', { environment: envInfo.environment });
   
   try {
-    // En OpenNext, los bindings están disponibles a través de process.env.DB
+    // En OpenNext, los bindings están disponibles a través del contexto de Cloudflare
     let db: any = null;
     
-    if (typeof process !== 'undefined' && (process.env as any).DB) {
-      db = (process.env as any).DB;
-      console.log('[PUT /api/usuarios] DB obtained from process.env');
+    const cloudflareContext = (globalThis as any)[Symbol.for('__cloudflare-context__')];
+    if (cloudflareContext?.env?.DB) {
+      db = cloudflareContext.env.DB;
+      console.log('[PUT /api/usuarios] DB obtained from Cloudflare context (OpenNext)');
     }
     
     if (!db) {
@@ -166,12 +169,13 @@ export async function DELETE(request: NextRequest) {
   console.log('[DELETE /api/usuarios] Starting request', { environment: envInfo.environment });
   
   try {
-    // En OpenNext, los bindings están disponibles a través de process.env.DB
+    // En OpenNext, los bindings están disponibles a través del contexto de Cloudflare
     let db: any = null;
     
-    if (typeof process !== 'undefined' && (process.env as any).DB) {
-      db = (process.env as any).DB;
-      console.log('[DELETE /api/usuarios] DB obtained from process.env');
+    const cloudflareContext = (globalThis as any)[Symbol.for('__cloudflare-context__')];
+    if (cloudflareContext?.env?.DB) {
+      db = cloudflareContext.env.DB;
+      console.log('[DELETE /api/usuarios] DB obtained from Cloudflare context (OpenNext)');
     }
     
     if (!db) {

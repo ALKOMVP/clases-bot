@@ -1,22 +1,24 @@
-/**
- * Helper para acceder a D1 database en OpenNext/Cloudflare
- * En OpenNext, los bindings están disponibles a través del objeto env
- * que se pasa en el contexto de la request
- */
+import { getMockDBInstance } from './db-mock';
 
-export function getDBFromEnv(env?: { DB?: any }): any | null {
-  // En OpenNext, los bindings están en env.DB
-  if (env?.DB) {
-    return env.DB;
+type D1Database = any; // Cloudflare D1 type
+
+/**
+ * Obtiene la instancia de D1 Database para OpenNext
+ * Primero intenta obtenerla del contexto de Cloudflare
+ * Si no está disponible, usa mock DB en desarrollo
+ */
+export function getOpenNextDB(): D1Database | null {
+  // En OpenNext, los bindings de D1 se exponen a través del contexto de Cloudflare
+  const cloudflareContext = (globalThis as any)[Symbol.for('__cloudflare-context__')];
+  if (cloudflareContext?.env?.DB) {
+    return cloudflareContext.env.DB;
   }
-  
-  // Fallback para desarrollo local
+
+  // En desarrollo local, usar mock DB
   if (typeof process !== 'undefined' && process.env.NODE_ENV === 'development') {
-    if ((process.env as any).DB) {
-      return (process.env as any).DB;
-    }
+    return getMockDBInstance() as any;
   }
-  
+
+  console.warn('D1 Database binding (DB) not found in OpenNext environment.');
   return null;
 }
-

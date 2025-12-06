@@ -2,13 +2,13 @@
   "/_not-found/page": "/_not-found",
   "/api/auth/logout/route": "/api/auth/logout",
   "/api/auth/login/route": "/api/auth/login",
-  "/api/test/route": "/api/test",
-  "/api/clases/route": "/api/clases",
   "/api/usuarios/route": "/api/usuarios",
+  "/api/test/route": "/api/test",
   "/api/reservas/route": "/api/reservas",
-  "/clases/page": "/clases",
-  "/page": "/",
-  "/reservas/page": "/reservas",
+  "/api/clases/route": "/api/clases",
+  "/login/page": "/login",
   "/usuarios/page": "/usuarios",
-  "/login/page": "/login"
+  "/clases/page": "/clases",
+  "/reservas/page": "/reservas",
+  "/page": "/"
 }
