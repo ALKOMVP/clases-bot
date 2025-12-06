@@ -1,10 +1,18 @@
 # Configuración de Cloudflare Pages
 
+## ⚠️ IMPORTANTE: Diferencia entre Workers y Pages
+
+**Tu proyecto debe estar en Cloudflare Pages, NO en Workers:**
+- ✅ **Pages**: URLs como `clases-bot.pages.dev` o `*.pages.dev`
+- ❌ **Workers**: URLs como `clases-bot.workers.dev` (esto es incorrecto para este proyecto)
+
+Si ves URLs con `.workers.dev`, estás en la sección incorrecta.
+
 ## Opción Recomendada: Conectar desde GitHub
 
 La forma más fácil de configurar todo automáticamente es conectar el proyecto desde GitHub:
 
-1. Ve a [Cloudflare Dashboard](https://dash.cloudflare.com) > **Pages**
+1. Ve a [Cloudflare Dashboard](https://dash.cloudflare.com) > **Pages** (NO Workers & Pages)
 2. Click en **"Create a project"** > **"Connect to Git"**
 3. Selecciona **GitHub** y autoriza el acceso
 4. Selecciona el repositorio: `ALKOMVP/clases-bot`
