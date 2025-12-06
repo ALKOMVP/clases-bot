@@ -53,86 +53,41 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   // Usar EXACTAMENTE el mismo patrón que GET que funciona
-  const envInfo = getEnvironmentInfo();
-  console.log('[POST /api/usuarios] Starting request', { environment: envInfo.environment });
+  // En OpenNext, los bindings están disponibles a través del contexto de Cloudflare
+  let db: any = null;
   
-  try {
-    // En OpenNext, los bindings están disponibles a través del contexto de Cloudflare
-    let db: any = null;
-    
-    const cloudflareContext = (globalThis as any)[Symbol.for('__cloudflare-context__')];
-    console.log('[POST /api/usuarios] Context check', {
-      hasContext: !!cloudflareContext,
-      hasEnv: !!cloudflareContext?.env,
-      hasDB: !!cloudflareContext?.env?.DB,
-      envKeys: cloudflareContext?.env ? Object.keys(cloudflareContext.env) : []
-    });
-    
-    // TEMPORAL: Forzar uso de mock DB para verificar que funciona
-    // TODO: Remover esto una vez que funcione
-    db = getMockDBInstance();
-    console.log('[POST /api/usuarios] FORCED: Using mock DB for testing', { 
-      hasMockDB: !!db,
-      mockDBType: typeof db,
-      hasPrepare: typeof db?.prepare === 'function'
-    });
-    
-    // Código original comentado temporalmente
-    // if (cloudflareContext?.env?.DB) {
-    //   db = cloudflareContext.env.DB;
-    //   console.log('[POST /api/usuarios] DB obtained from Cloudflare context (OpenNext)');
-    // }
-    // 
-    // if (!db) {
-    //   // Si no hay DB disponible, usar mock como fallback
-    //   db = getMockDBInstance();
-    //   console.log('[POST /api/usuarios] Using mock DB as fallback', { 
-    //     hasMockDB: !!db,
-    //     mockDBType: typeof db,
-    //     hasPrepare: typeof db?.prepare === 'function'
-    //   });
-    // }
-    
-    // Verificar que la DB esté disponible (ya sea real o mock)
-    if (!db || typeof db.prepare !== 'function') {
-      console.error('[POST /api/usuarios] DB is invalid', { 
-        hasDB: !!db,
-        dbType: typeof db,
-        hasPrepare: typeof db?.prepare === 'function'
-      });
-      // Usar un mensaje que NO sea detectado por createErrorResponse
-      return NextResponse.json({ error: 'Database binding unavailable' }, { status: 503 });
-    }
-
-    const body = await request.json();
-    const { nombre, apellido, email, fecha_alta } = body;
-
-    if (!nombre || !apellido || !email) {
-      return NextResponse.json({ error: 'Faltan campos requeridos' }, { status: 400 });
-    }
-
-    // Ejecutar INSERT directamente - mismo patrón que GET
-    const result = await db.prepare(
-      'INSERT INTO usuario (nombre, apellido, email, fecha_alta) VALUES (?, ?, ?, ?)'
-    ).bind(nombre, apellido, email, fecha_alta || null).run();
-    
-    const lastRowId = result && typeof result === 'object' 
-      ? (result as any).meta?.last_row_id || (result as any).last_row_id
-      : null;
-
-    console.log('[POST /api/usuarios] Success', { id: lastRowId });
-    return NextResponse.json({ success: true, id: lastRowId });
-  } catch (error: any) {
-    // NO usar createErrorResponse - devolver error directo
-    if (error?.message?.includes('UNIQUE constraint')) {
-      return NextResponse.json({ error: 'El email ya existe' }, { status: 400 });
-    }
-    
-    return NextResponse.json({ 
-      error: 'Error al crear usuario',
-      details: error?.message || String(error)
-    }, { status: 500 });
+  const cloudflareContext = (globalThis as any)[Symbol.for('__cloudflare-context__')];
+  if (cloudflareContext?.env?.DB) {
+    db = cloudflareContext.env.DB;
   }
+  
+  if (!db) {
+    // Si no hay DB disponible, usar mock como fallback
+    db = getMockDBInstance();
+  }
+  
+  // Verificar que la DB esté disponible (ya sea real o mock)
+  if (!db) {
+    return NextResponse.json({ error: 'Database not available' }, { status: 503 });
+  }
+
+  const body = await request.json();
+  const { nombre, apellido, email, fecha_alta } = body;
+
+  if (!nombre || !apellido || !email) {
+    return NextResponse.json({ error: 'Faltan campos requeridos' }, { status: 400 });
+  }
+
+  // Ejecutar INSERT directamente - mismo patrón que GET
+  const result = await db.prepare(
+    'INSERT INTO usuario (nombre, apellido, email, fecha_alta) VALUES (?, ?, ?, ?)'
+  ).bind(nombre, apellido, email, fecha_alta || null).run();
+  
+  const lastRowId = result && typeof result === 'object' 
+    ? (result as any).meta?.last_row_id || (result as any).last_row_id
+    : null;
+
+  return NextResponse.json({ success: true, id: lastRowId });
 }
 
 export async function PUT(request: NextRequest) {
