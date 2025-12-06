@@ -8,29 +8,44 @@
 
 Si ves URLs con `.workers.dev`, estás en la sección incorrecta.
 
-## Opción Recomendada: Conectar desde GitHub
+## ⚠️ Si tu proyecto está como Worker, créalo como Page
 
-La forma más fácil de configurar todo automáticamente es conectar el proyecto desde GitHub:
+**Si ves URLs con `.workers.dev`, tu proyecto está como Worker. Necesitas crearlo como Page:**
 
-1. Ve a [Cloudflare Dashboard](https://dash.cloudflare.com) > **Pages** (NO Workers & Pages)
-2. Click en **"Create a project"** > **"Connect to Git"**
-3. Selecciona **GitHub** y autoriza el acceso
-4. Selecciona el repositorio: `ALKOMVP/clases-bot`
-5. Configura el build:
-   - **Framework preset**: None (no usar Next.js preset)
+### Pasos para crear el proyecto como Page:
+
+1. **Ve a la sección de Pages:**
+   - Ve a [Cloudflare Dashboard](https://dash.cloudflare.com)
+   - En el menú lateral, busca **"Pages"** (NO "Workers & Pages")
+   - O usa este enlace directo: https://dash.cloudflare.com/pages
+
+2. **Crea un nuevo proyecto:**
+   - Click en **"Create a project"** (botón azul)
+   - Selecciona **"Connect to Git"**
+   - Selecciona **GitHub** y autoriza el acceso si es necesario
+   - Selecciona el repositorio: `ALKOMVP/clases-bot`
+
+3. **Configura el build:**
+   - **Project name**: `clases-bot` (o el nombre que prefieras)
+   - **Production branch**: `main` (o `master` si es tu rama principal)
+   - **Framework preset**: **None** (NO uses Next.js preset)
    - **Build command**: `npm ci && npm run build:cloudflare`
    - **Build output directory**: `.vercel/output/static`
-   - **Root directory**: `/` (dejar vacío)
+   - **Root directory**: (dejar vacío)
    - **Node.js version**: 20.x (o la más reciente disponible)
-   - **Deploy command**: (DEJAR VACÍO si es posible, o usar `echo "Deploy completed"` si el campo es requerido)
-     - ⚠️ **IMPORTANTE**: NO uses `npx wrangler deploy` - ese es para Workers, no para Pages
-     - Cloudflare Pages despliega automáticamente después del build, no necesita un comando de deploy
-6. En **"Environment variables"**: No necesitas agregar nada
-7. Click en **"Save and Deploy"**
+   - **Deploy command**: `echo "Deploy completed"` (si el campo es requerido)
+     - ⚠️ **IMPORTANTE**: NO uses `npx wrangler deploy` - ese es para Workers
 
-Cloudflare leerá automáticamente el `wrangler.toml` y configurará:
-- ✅ Compatibility flags (`nodejs_compat`)
-- ✅ D1 database bindings
+4. **Environment variables**: No necesitas agregar nada aquí
+
+5. **Click en "Save and Deploy"**
+
+6. **Después del primer deploy, configura:**
+   - Ve a **Settings** > **Functions**
+   - Agrega el binding D1: Variable `DB`, Database `clases-db`
+   - Agrega el compatibility flag `nodejs_compat`
+
+**Nota:** Puedes tener el proyecto como Worker Y como Page al mismo tiempo. El proyecto de Worker no afectará al de Page.
 
 ## Opción Manual: Configurar en el Dashboard
 
@@ -76,9 +91,37 @@ Después de un build exitoso, Cloudflare Pages genera automáticamente URLs:
 4. Click en el deployment para ver los detalles
 5. Ahí verás la URL de preview y la URL de producción (si está configurada)
 
+## Solución para "No URLs enabled"
+
+Si ves "No URLs enabled" después del build:
+
+1. **Espera a que el build termine**: Si ves "Build in progress", espera a que termine (puede tardar 2-5 minutos)
+
+2. **Verifica el Build Output Directory**:
+   - Ve a **Settings** > **Builds & deployments**
+   - Asegúrate de que **"Build output directory"** sea exactamente: `.vercel/output/static`
+   - Guarda los cambios
+
+3. **Verifica el deployment**:
+   - Ve a la pestaña **"Deployments"**
+   - Busca el deployment más reciente
+   - Debe estar marcado como **"Success"** (✅ verde)
+   - Si hay errores, revisa los logs del build
+
+4. **Si el build falla o no genera URLs**:
+   - Verifica que el build command sea: `npm ci && npm run build:cloudflare`
+   - Verifica que el output directory sea: `.vercel/output/static`
+   - Revisa los logs del build para ver errores específicos
+
+5. **Después de un build exitoso**:
+   - Las URLs aparecerán automáticamente en la pestaña **"Deployments"**
+   - Cada deployment tiene su propia URL de preview
+   - La URL de producción será `https://clases-bot.pages.dev` (si está configurada)
+
 ## Notas
 
 - El flag `nodejs_compat` es necesario para que Next.js funcione correctamente en Cloudflare Pages
 - El binding de D1 es necesario para que las rutas API puedan acceder a la base de datos
 - Sin estos dos pasos, verás errores como "Node.JS Compatibility Error" o "405 Method Not Allowed"
+- "No URLs enabled" generalmente significa que el build aún está en progreso o que el deployment no se completó correctamente
 
