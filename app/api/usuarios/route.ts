@@ -125,30 +125,29 @@ export async function POST(request: NextRequest) {
       name: error?.name,
       stack: error?.stack,
       error: String(error),
-      errorType: typeof error
+      errorType: typeof error,
+      errorKeys: error ? Object.keys(error) : []
     });
     
-    if (error.message?.includes('UNIQUE constraint')) {
+    // Manejar errores específicos
+    if (error?.message?.includes('UNIQUE constraint')) {
       return NextResponse.json({ error: 'El email ya existe' }, { status: 400 });
     }
     
-    // Si el error no es explícitamente sobre DB no disponible, devolver error genérico
-    const isDBError = error?.message === 'Database not available' || 
-                      error?.message === 'DB not available' ||
-                      error?.message === 'Base de datos no disponible';
-    
-    if (!isDBError) {
+    // Si el error es sobre DB no disponible (ya manejado arriba), devolver error directo
+    if (error?.message?.includes('Base de datos no disponible') || 
+        error?.message?.includes('DB not available')) {
       return NextResponse.json({ 
-        error: 'Error al crear usuario',
-        details: error?.message || String(error)
-      }, { status: 500 });
+        error: 'Base de datos no disponible',
+        details: error?.message || 'El binding de D1 no está configurado correctamente'
+      }, { status: 503 });
     }
     
-    return createErrorResponse(
-      error,
-      'Error al crear usuario',
-      { route: '/api/usuarios', method: 'POST', operation: 'create_usuario' }
-    );
+    // Para cualquier otro error, devolver error genérico con detalles
+    return NextResponse.json({ 
+      error: 'Error al crear usuario',
+      details: error?.message || String(error)
+    }, { status: 500 });
   }
 }
 
