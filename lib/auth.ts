@@ -14,9 +14,14 @@ export function isAuthenticated(request: NextRequest): boolean {
 }
 
 export function setSessionCookie(response: NextResponse): NextResponse {
+  // En Cloudflare Pages, siempre usar secure en producción
+  // Determinar si estamos en producción basado en la URL o headers
+  const isProduction = typeof process === 'undefined' || 
+                       (typeof process !== 'undefined' && process.env?.NODE_ENV === 'production');
+  
   response.cookies.set(SESSION_COOKIE, 'authenticated', {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
+    secure: isProduction,
     sameSite: 'lax',
     maxAge: 60 * 60 * 24 * 7, // 7 días
   });
