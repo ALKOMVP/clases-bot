@@ -106,16 +106,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'El email ya existe' }, { status: 400 });
     }
     
-    // Si el error es sobre DB no disponible (ya manejado arriba), devolver error directo
-    if (error?.message?.includes('Base de datos no disponible') || 
-        error?.message?.includes('DB not available')) {
-      return NextResponse.json({ 
-        error: 'Base de datos no disponible',
-        details: error?.message || 'El binding de D1 no está configurado correctamente'
-      }, { status: 503 });
-    }
-    
     // Para cualquier otro error, devolver error genérico con detalles
+    // NO usar createErrorResponse para evitar problemas de detección de entorno
     return NextResponse.json({ 
       error: 'Error al crear usuario',
       details: error?.message || String(error)
