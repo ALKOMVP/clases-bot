@@ -1,15 +1,15 @@
 {
   "/_not-found/page": "/_not-found",
   "/api/auth/logout/route": "/api/auth/logout",
-  "/api/test-post/route": "/api/test-post",
   "/api/auth/login/route": "/api/auth/login",
+  "/api/test-post/route": "/api/test-post",
   "/api/test/route": "/api/test",
-  "/api/usuarios/route": "/api/usuarios",
-  "/api/clases/route": "/api/clases",
   "/api/reservas/route": "/api/reservas",
+  "/api/clases/route": "/api/clases",
+  "/api/usuarios/route": "/api/usuarios",
+  "/usuarios/page": "/usuarios",
+  "/page": "/",
   "/clases/page": "/clases",
   "/login/page": "/login",
-  "/page": "/",
-  "/reservas/page": "/reservas",
-  "/usuarios/page": "/usuarios"
+  "/reservas/page": "/reservas"
 }
