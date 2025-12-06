@@ -59,22 +59,20 @@ export async function POST(request: NextRequest) {
     // En OpenNext, los bindings están disponibles a través del contexto de Cloudflare
     let db: any = null;
     
+    // Acceder al contexto de Cloudflare de la misma forma que /api/test
     const cloudflareContext = (globalThis as any)[Symbol.for('__cloudflare-context__')];
+    db = cloudflareContext?.env?.DB;
+    
     console.log('[POST /api/usuarios] Cloudflare context check', {
       hasContext: !!cloudflareContext,
       hasEnv: !!cloudflareContext?.env,
-      hasDB: !!cloudflareContext?.env?.DB,
+      hasDB: !!db,
+      dbType: typeof db,
+      hasPrepare: typeof db?.prepare === 'function',
       envKeys: cloudflareContext?.env ? Object.keys(cloudflareContext.env) : []
     });
     
-    if (cloudflareContext?.env?.DB) {
-      db = cloudflareContext.env.DB;
-      console.log('[POST /api/usuarios] DB obtained from Cloudflare context (OpenNext)', {
-        hasDB: !!db,
-        dbType: typeof db,
-        hasPrepare: typeof db?.prepare === 'function'
-      });
-    } else {
+    if (!db) {
       // Si no hay DB en el contexto, intentar obtenerla de otra forma
       console.warn('[POST /api/usuarios] DB not found in Cloudflare context, checking alternatives');
       
@@ -88,9 +86,11 @@ export async function POST(request: NextRequest) {
         console.error('[POST /api/usuarios] DB not available in production - Cloudflare context missing');
         return NextResponse.json({ 
           error: 'Base de datos no disponible',
-          details: 'El binding de D1 no está disponible en el contexto de Cloudflare'
+          details: 'El binding de D1 no está disponible en el contexto de Cloudflare. Verifica la configuración del binding en Cloudflare Pages.'
         }, { status: 503 });
       }
+    } else {
+      console.log('[POST /api/usuarios] DB obtained from Cloudflare context (OpenNext)');
     }
     
     // Verificar que la DB esté disponible
