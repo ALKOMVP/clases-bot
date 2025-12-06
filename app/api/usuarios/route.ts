@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getMockDBInstance } from '@/lib/db-mock';
-import { createErrorResponse, checkDatabaseAvailability, getEnvironmentInfo } from '@/lib/error-handler';
+import { createErrorResponse, getEnvironmentInfo } from '@/lib/error-handler';
 
 // OpenNext no requiere runtime = 'edge' explícito
 

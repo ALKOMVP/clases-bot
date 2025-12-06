@@ -3460,18 +3460,13 @@
       "imports": [],
       "format": "cjs"
     },
-    ".open-next/server-functions/default/.next/server/app/reservas/page_client-reference-manifest.js": {
-      "bytes": 5899,
-      "imports": [],
-      "format": "cjs"
-    },
     ".open-next/server-functions/default/.next/server/app/usuarios/page_client-reference-manifest.js": {
       "bytes": 5899,
       "imports": [],
       "format": "cjs"
     },
-    ".open-next/server-functions/default/.next/server/app/_not-found/page_client-reference-manifest.js": {
-      "bytes": 5798,
+    ".open-next/server-functions/default/.next/server/app/reservas/page_client-reference-manifest.js": {
+      "bytes": 5899,
       "imports": [],
       "format": "cjs"
     },
@@ -3485,6 +3480,11 @@
       "imports": [],
       "format": "cjs"
     },
+    ".open-next/server-functions/default/.next/server/app/_not-found/page_client-reference-manifest.js": {
+      "bytes": 5798,
+      "imports": [],
+      "format": "cjs"
+    },
     ".open-next/server-functions/default/.next/server/app/api/usuarios/route_client-reference-manifest.js": {
       "bytes": 5804,
       "imports": [],
@@ -3495,13 +3495,13 @@
       "imports": [],
       "format": "cjs"
     },
-    ".open-next/server-functions/default/.next/server/app/api/clases/route_client-reference-manifest.js": {
-      "bytes": 5800,
+    ".open-next/server-functions/default/.next/server/app/api/reservas/route_client-reference-manifest.js": {
+      "bytes": 5804,
       "imports": [],
       "format": "cjs"
     },
-    ".open-next/server-functions/default/.next/server/app/api/reservas/route_client-reference-manifest.js": {
-      "bytes": 5804,
+    ".open-next/server-functions/default/.next/server/app/api/clases/route_client-reference-manifest.js": {
+      "bytes": 5800,
       "imports": [],
       "format": "cjs"
     },
@@ -3544,19 +3544,14 @@
           "original": "/Users/alko/clases-bot/.open-next/server-functions/default/.next/server/app/page_client-reference-manifest.js"
         },
         {
-          "path": ".open-next/server-functions/default/.next/server/app/reservas/page_client-reference-manifest.js",
-          "kind": "require-call",
-          "original": "/Users/alko/clases-bot/.open-next/server-functions/default/.next/server/app/reservas/page_client-reference-manifest.js"
-        },
-        {
           "path": ".open-next/server-functions/default/.next/server/app/usuarios/page_client-reference-manifest.js",
           "kind": "require-call",
           "original": "/Users/alko/clases-bot/.open-next/server-functions/default/.next/server/app/usuarios/page_client-reference-manifest.js"
         },
         {
-          "path": ".open-next/server-functions/default/.next/server/app/_not-found/page_client-reference-manifest.js",
+          "path": ".open-next/server-functions/default/.next/server/app/reservas/page_client-reference-manifest.js",
           "kind": "require-call",
-          "original": "/Users/alko/clases-bot/.open-next/server-functions/default/.next/server/app/_not-found/page_client-reference-manifest.js"
+          "original": "/Users/alko/clases-bot/.open-next/server-functions/default/.next/server/app/reservas/page_client-reference-manifest.js"
         },
         {
           "path": ".open-next/server-functions/default/.next/server/app/login/page_client-reference-manifest.js",
@@ -3569,6 +3564,11 @@
           "original": "/Users/alko/clases-bot/.open-next/server-functions/default/.next/server/app/clases/page_client-reference-manifest.js"
         },
         {
+          "path": ".open-next/server-functions/default/.next/server/app/_not-found/page_client-reference-manifest.js",
+          "kind": "require-call",
+          "original": "/Users/alko/clases-bot/.open-next/server-functions/default/.next/server/app/_not-found/page_client-reference-manifest.js"
+        },
+        {
           "path": ".open-next/server-functions/default/.next/server/app/api/usuarios/route_client-reference-manifest.js",
           "kind": "require-call",
           "original": "/Users/alko/clases-bot/.open-next/server-functions/default/.next/server/app/api/usuarios/route_client-reference-manifest.js"
@@ -3579,14 +3579,14 @@
           "original": "/Users/alko/clases-bot/.open-next/server-functions/default/.next/server/app/api/test/route_client-reference-manifest.js"
         },
         {
-          "path": ".open-next/server-functions/default/.next/server/app/api/clases/route_client-reference-manifest.js",
-          "kind": "require-call",
-          "original": "/Users/alko/clases-bot/.open-next/server-functions/default/.next/server/app/api/clases/route_client-reference-manifest.js"
-        },
-        {
           "path": ".open-next/server-functions/default/.next/server/app/api/reservas/route_client-reference-manifest.js",
           "kind": "require-call",
           "original": "/Users/alko/clases-bot/.open-next/server-functions/default/.next/server/app/api/reservas/route_client-reference-manifest.js"
+        },
+        {
+          "path": ".open-next/server-functions/default/.next/server/app/api/clases/route_client-reference-manifest.js",
+          "kind": "require-call",
+          "original": "/Users/alko/clases-bot/.open-next/server-functions/default/.next/server/app/api/clases/route_client-reference-manifest.js"
         },
         {
           "path": ".open-next/server-functions/default/.next/server/app/api/auth/logout/route_client-reference-manifest.js",
@@ -4464,6 +4464,47 @@
       ],
       "format": "cjs"
     },
+    ".open-next/server-functions/default/.next/server/app/api/test/route.js": {
+      "bytes": 7186,
+      "imports": [
+        {
+          "path": ".open-next/server-functions/default/node_modules/next/dist/shared/lib/router/utils/app-paths.js",
+          "kind": "require-call",
+          "original": "next/dist/shared/lib/router/utils/app-paths"
+        },
+        {
+          "path": ".open-next/server-functions/default/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js",
+          "kind": "require-call",
+          "original": "next/dist/compiled/next-server/app-page.runtime.prod.js"
+        },
+        {
+          "path": ".open-next/server-functions/default/node_modules/next/dist/server/app-render/work-unit-async-storage.external.js",
+          "kind": "require-call",
+          "original": "next/dist/server/app-render/work-unit-async-storage.external.js"
+        },
+        {
+          "path": ".open-next/server-functions/default/node_modules/next/dist/compiled/next-server/app-route.runtime.prod.js",
+          "kind": "require-call",
+          "original": "next/dist/compiled/next-server/app-route.runtime.prod.js"
+        },
+        {
+          "path": ".open-next/server-functions/default/node_modules/next/dist/shared/lib/no-fallback-error.external.js",
+          "kind": "require-call",
+          "original": "next/dist/shared/lib/no-fallback-error.external"
+        },
+        {
+          "path": ".open-next/server-functions/default/node_modules/next/dist/server/app-render/work-async-storage.external.js",
+          "kind": "require-call",
+          "original": "next/dist/server/app-render/work-async-storage.external.js"
+        },
+        {
+          "path": ".open-next/server-functions/default/.next/server/webpack-runtime.js",
+          "kind": "require-call",
+          "original": "../../../webpack-runtime.js"
+        }
+      ],
+      "format": "cjs"
+    },
     ".open-next/server-functions/default/.next/server/app/api/auth/logout/route.js": {
       "bytes": 6883,
       "imports": [
@@ -4506,47 +4547,6 @@
           "path": ".open-next/server-functions/default/.next/server/webpack-runtime.js",
           "kind": "require-call",
           "original": "../../../../webpack-runtime.js"
-        }
-      ],
-      "format": "cjs"
-    },
-    ".open-next/server-functions/default/.next/server/app/api/test/route.js": {
-      "bytes": 7186,
-      "imports": [
-        {
-          "path": ".open-next/server-functions/default/node_modules/next/dist/shared/lib/router/utils/app-paths.js",
-          "kind": "require-call",
-          "original": "next/dist/shared/lib/router/utils/app-paths"
-        },
-        {
-          "path": ".open-next/server-functions/default/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js",
-          "kind": "require-call",
-          "original": "next/dist/compiled/next-server/app-page.runtime.prod.js"
-        },
-        {
-          "path": ".open-next/server-functions/default/node_modules/next/dist/server/app-render/work-unit-async-storage.external.js",
-          "kind": "require-call",
-          "original": "next/dist/server/app-render/work-unit-async-storage.external.js"
-        },
-        {
-          "path": ".open-next/server-functions/default/node_modules/next/dist/compiled/next-server/app-route.runtime.prod.js",
-          "kind": "require-call",
-          "original": "next/dist/compiled/next-server/app-route.runtime.prod.js"
-        },
-        {
-          "path": ".open-next/server-functions/default/node_modules/next/dist/shared/lib/no-fallback-error.external.js",
-          "kind": "require-call",
-          "original": "next/dist/shared/lib/no-fallback-error.external"
-        },
-        {
-          "path": ".open-next/server-functions/default/node_modules/next/dist/server/app-render/work-async-storage.external.js",
-          "kind": "require-call",
-          "original": "next/dist/server/app-render/work-async-storage.external.js"
-        },
-        {
-          "path": ".open-next/server-functions/default/.next/server/webpack-runtime.js",
-          "kind": "require-call",
-          "original": "../../../webpack-runtime.js"
         }
       ],
       "format": "cjs"
@@ -4735,8 +4735,8 @@
       ],
       "format": "cjs"
     },
-    ".open-next/server-functions/default/.next/server/app/page.js": {
-      "bytes": 23392,
+    ".open-next/server-functions/default/.next/server/app/login/page.js": {
+      "bytes": 21346,
       "imports": [
         {
           "path": ".open-next/server-functions/default/node_modules/next/dist/shared/lib/router/utils/app-paths.js",
@@ -4796,7 +4796,7 @@
         {
           "path": ".open-next/server-functions/default/.next/server/webpack-runtime.js",
           "kind": "require-call",
-          "original": "../webpack-runtime.js"
+          "original": "../../webpack-runtime.js"
         }
       ],
       "format": "cjs"
@@ -4867,8 +4867,8 @@
       ],
       "format": "cjs"
     },
-    ".open-next/server-functions/default/.next/server/app/reservas/page.js": {
-      "bytes": 27725,
+    ".open-next/server-functions/default/.next/server/app/page.js": {
+      "bytes": 23392,
       "imports": [
         {
           "path": ".open-next/server-functions/default/node_modules/next/dist/shared/lib/router/utils/app-paths.js",
@@ -4928,13 +4928,13 @@
         {
           "path": ".open-next/server-functions/default/.next/server/webpack-runtime.js",
           "kind": "require-call",
-          "original": "../../webpack-runtime.js"
+          "original": "../webpack-runtime.js"
         }
       ],
       "format": "cjs"
     },
-    ".open-next/server-functions/default/.next/server/app/login/page.js": {
-      "bytes": 21346,
+    ".open-next/server-functions/default/.next/server/app/reservas/page.js": {
+      "bytes": 27725,
       "imports": [
         {
           "path": ".open-next/server-functions/default/node_modules/next/dist/shared/lib/router/utils/app-paths.js",
@@ -5134,14 +5134,14 @@
           "original": "/Users/alko/clases-bot/.open-next/server-functions/default/.next/server/app/_not-found/page.js"
         },
         {
-          "path": ".open-next/server-functions/default/.next/server/app/api/auth/logout/route.js",
-          "kind": "require-call",
-          "original": "/Users/alko/clases-bot/.open-next/server-functions/default/.next/server/app/api/auth/logout/route.js"
-        },
-        {
           "path": ".open-next/server-functions/default/.next/server/app/api/test/route.js",
           "kind": "require-call",
           "original": "/Users/alko/clases-bot/.open-next/server-functions/default/.next/server/app/api/test/route.js"
+        },
+        {
+          "path": ".open-next/server-functions/default/.next/server/app/api/auth/logout/route.js",
+          "kind": "require-call",
+          "original": "/Users/alko/clases-bot/.open-next/server-functions/default/.next/server/app/api/auth/logout/route.js"
         },
         {
           "path": ".open-next/server-functions/default/.next/server/app/api/auth/login/route.js",
@@ -5164,9 +5164,9 @@
           "original": "/Users/alko/clases-bot/.open-next/server-functions/default/.next/server/app/api/usuarios/route.js"
         },
         {
-          "path": ".open-next/server-functions/default/.next/server/app/page.js",
+          "path": ".open-next/server-functions/default/.next/server/app/login/page.js",
           "kind": "require-call",
-          "original": "/Users/alko/clases-bot/.open-next/server-functions/default/.next/server/app/page.js"
+          "original": "/Users/alko/clases-bot/.open-next/server-functions/default/.next/server/app/login/page.js"
         },
         {
           "path": ".open-next/server-functions/default/.next/server/app/clases/page.js",
@@ -5174,14 +5174,14 @@
           "original": "/Users/alko/clases-bot/.open-next/server-functions/default/.next/server/app/clases/page.js"
         },
         {
+          "path": ".open-next/server-functions/default/.next/server/app/page.js",
+          "kind": "require-call",
+          "original": "/Users/alko/clases-bot/.open-next/server-functions/default/.next/server/app/page.js"
+        },
+        {
           "path": ".open-next/server-functions/default/.next/server/app/reservas/page.js",
           "kind": "require-call",
           "original": "/Users/alko/clases-bot/.open-next/server-functions/default/.next/server/app/reservas/page.js"
-        },
-        {
-          "path": ".open-next/server-functions/default/.next/server/app/login/page.js",
-          "kind": "require-call",
-          "original": "/Users/alko/clases-bot/.open-next/server-functions/default/.next/server/app/login/page.js"
         },
         {
           "path": ".open-next/server-functions/default/.next/server/app/usuarios/page.js",
@@ -8417,14 +8417,11 @@
         ".open-next/server-functions/default/.next/server/app/page_client-reference-manifest.js": {
           "bytesInOutput": 5210
         },
-        ".open-next/server-functions/default/.next/server/app/reservas/page_client-reference-manifest.js": {
-          "bytesInOutput": 5380
-        },
         ".open-next/server-functions/default/.next/server/app/usuarios/page_client-reference-manifest.js": {
           "bytesInOutput": 5380
         },
-        ".open-next/server-functions/default/.next/server/app/_not-found/page_client-reference-manifest.js": {
-          "bytesInOutput": 5281
+        ".open-next/server-functions/default/.next/server/app/reservas/page_client-reference-manifest.js": {
+          "bytesInOutput": 5380
         },
         ".open-next/server-functions/default/.next/server/app/login/page_client-reference-manifest.js": {
           "bytesInOutput": 5322
@@ -8432,17 +8429,20 @@
         ".open-next/server-functions/default/.next/server/app/clases/page_client-reference-manifest.js": {
           "bytesInOutput": 5372
         },
+        ".open-next/server-functions/default/.next/server/app/_not-found/page_client-reference-manifest.js": {
+          "bytesInOutput": 5281
+        },
         ".open-next/server-functions/default/.next/server/app/api/usuarios/route_client-reference-manifest.js": {
           "bytesInOutput": 5290
         },
         ".open-next/server-functions/default/.next/server/app/api/test/route_client-reference-manifest.js": {
           "bytesInOutput": 5279
         },
-        ".open-next/server-functions/default/.next/server/app/api/clases/route_client-reference-manifest.js": {
-          "bytesInOutput": 5285
-        },
         ".open-next/server-functions/default/.next/server/app/api/reservas/route_client-reference-manifest.js": {
           "bytesInOutput": 5291
+        },
+        ".open-next/server-functions/default/.next/server/app/api/clases/route_client-reference-manifest.js": {
+          "bytesInOutput": 5285
         },
         ".open-next/server-functions/default/.next/server/app/api/auth/logout/route_client-reference-manifest.js": {
           "bytesInOutput": 5300
@@ -8567,11 +8567,11 @@
         ".open-next/server-functions/default/node_modules/next/dist/compiled/next-server/app-route.runtime.prod.js": {
           "bytesInOutput": 164372
         },
-        ".open-next/server-functions/default/.next/server/app/api/auth/logout/route.js": {
-          "bytesInOutput": 6992
-        },
         ".open-next/server-functions/default/.next/server/app/api/test/route.js": {
-          "bytesInOutput": 7358
+          "bytesInOutput": 7357
+        },
+        ".open-next/server-functions/default/.next/server/app/api/auth/logout/route.js": {
+          "bytesInOutput": 6993
         },
         ".open-next/server-functions/default/.next/server/app/api/auth/login/route.js": {
           "bytesInOutput": 7705
@@ -8585,17 +8585,17 @@
         ".open-next/server-functions/default/.next/server/app/api/usuarios/route.js": {
           "bytesInOutput": 11331
         },
-        ".open-next/server-functions/default/.next/server/app/page.js": {
-          "bytesInOutput": 23711
+        ".open-next/server-functions/default/.next/server/app/login/page.js": {
+          "bytesInOutput": 21636
         },
         ".open-next/server-functions/default/.next/server/app/clases/page.js": {
           "bytesInOutput": 29790
         },
+        ".open-next/server-functions/default/.next/server/app/page.js": {
+          "bytesInOutput": 23711
+        },
         ".open-next/server-functions/default/.next/server/app/reservas/page.js": {
           "bytesInOutput": 28138
-        },
-        ".open-next/server-functions/default/.next/server/app/login/page.js": {
-          "bytesInOutput": 21636
         },
         ".open-next/server-functions/default/.next/server/app/usuarios/page.js": {
           "bytesInOutput": 31331
