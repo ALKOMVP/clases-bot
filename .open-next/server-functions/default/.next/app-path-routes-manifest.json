@@ -4,11 +4,11 @@
   "/api/test/route": "/api/test",
   "/api/auth/login/route": "/api/auth/login",
   "/api/clases/route": "/api/clases",
-  "/api/usuarios/route": "/api/usuarios",
   "/api/reservas/route": "/api/reservas",
-  "/page": "/",
+  "/api/usuarios/route": "/api/usuarios",
   "/login/page": "/login",
   "/clases/page": "/clases",
-  "/usuarios/page": "/usuarios",
-  "/reservas/page": "/reservas"
+  "/page": "/",
+  "/reservas/page": "/reservas",
+  "/usuarios/page": "/usuarios"
 }
