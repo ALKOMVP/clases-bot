@@ -116,18 +116,20 @@ export async function POST(request: NextRequest) {
       message: error?.message,
       name: error?.name,
       stack: error?.stack,
-      error: String(error)
+      error: String(error),
+      errorType: typeof error
     });
     
     if (error.message?.includes('UNIQUE constraint')) {
       return NextResponse.json({ error: 'El email ya existe' }, { status: 400 });
     }
     
-    // Si el error no es de base de datos, devolver error genérico
-    if (!error.message?.includes('Database') && 
-        !error.message?.includes('DB') && 
-        !error.message?.includes('D1') && 
-        !error.message?.includes('binding')) {
+    // Si el error no es explícitamente sobre DB no disponible, devolver error genérico
+    const isDBError = error?.message === 'Database not available' || 
+                      error?.message === 'DB not available' ||
+                      error?.message === 'Base de datos no disponible';
+    
+    if (!isDBError) {
       return NextResponse.json({ 
         error: 'Error al crear usuario',
         details: error?.message || String(error)
