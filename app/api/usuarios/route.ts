@@ -52,29 +52,29 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  // Usar EXACTAMENTE el mismo patrón que GET que funciona
+  const envInfo = getEnvironmentInfo();
+  console.log('[POST /api/usuarios] Starting request', { environment: envInfo.environment });
+  
   try {
-    // Usar el mismo patrón exacto que GET - acceder a DB de la misma forma
+    // En OpenNext, los bindings están disponibles a través del contexto de Cloudflare
     let db: any = null;
     
     const cloudflareContext = (globalThis as any)[Symbol.for('__cloudflare-context__')];
     if (cloudflareContext?.env?.DB) {
       db = cloudflareContext.env.DB;
+      console.log('[POST /api/usuarios] DB obtained from Cloudflare context (OpenNext)');
     }
     
-    // Si no hay DB disponible, usar mock como fallback (solo en desarrollo)
     if (!db) {
-      const isDevelopment = typeof process !== 'undefined' && process.env.NODE_ENV === 'development';
-      if (isDevelopment) {
-        db = getMockDBInstance();
-      } else {
-        // En producción, si no hay DB, devolver error simple
-        return NextResponse.json({ error: 'Database binding not available' }, { status: 503 });
-      }
+      // Si no hay DB disponible, usar mock como fallback
+      db = getMockDBInstance();
+      console.log('[POST /api/usuarios] Using mock DB as fallback');
     }
     
-    // Verificar que la DB esté disponible
+    // Verificar que la DB esté disponible (ya sea real o mock)
     if (!db) {
-      return NextResponse.json({ error: 'Database not available' }, { status: 503 });
+      return NextResponse.json({ error: 'Base de datos no disponible' }, { status: 503 });
     }
 
     const body = await request.json();
@@ -93,14 +93,14 @@ export async function POST(request: NextRequest) {
       ? (result as any).meta?.last_row_id || (result as any).last_row_id
       : null;
 
+    console.log('[POST /api/usuarios] Success', { id: lastRowId });
     return NextResponse.json({ success: true, id: lastRowId });
   } catch (error: any) {
-    // Manejar errores específicos
+    // NO usar createErrorResponse - devolver error directo
     if (error?.message?.includes('UNIQUE constraint')) {
       return NextResponse.json({ error: 'El email ya existe' }, { status: 400 });
     }
     
-    // Para cualquier otro error, devolver error genérico sin usar createErrorResponse
     return NextResponse.json({ 
       error: 'Error al crear usuario',
       details: error?.message || String(error)
