@@ -61,6 +61,13 @@ export async function POST(request: NextRequest) {
     let db: any = null;
     
     const cloudflareContext = (globalThis as any)[Symbol.for('__cloudflare-context__')];
+    console.log('[POST /api/usuarios] Context check', {
+      hasContext: !!cloudflareContext,
+      hasEnv: !!cloudflareContext?.env,
+      hasDB: !!cloudflareContext?.env?.DB,
+      envKeys: cloudflareContext?.env ? Object.keys(cloudflareContext.env) : []
+    });
+    
     if (cloudflareContext?.env?.DB) {
       db = cloudflareContext.env.DB;
       console.log('[POST /api/usuarios] DB obtained from Cloudflare context (OpenNext)');
