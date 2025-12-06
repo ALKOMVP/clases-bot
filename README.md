@@ -53,18 +53,34 @@ npm run dev
 
 ### 6. Desplegar a Cloudflare Pages
 
-1. Conecta tu repositorio a Cloudflare Pages
+#### Opción A: Deploy manual
+```bash
+# 1. Build para Cloudflare
+npm run build:cloudflare
+
+# 2. Deploy
+npx wrangler pages deploy .vercel/output/static --project-name=clases-bot
+```
+
+#### Opción B: Deploy automático desde GitHub
+1. Conecta tu repositorio a Cloudflare Pages desde el dashboard
 2. Configura el build:
-   - Build command: `npm run build`
-   - Build output directory: `.next`
-3. Agrega las variables de entorno:
-   - En Cloudflare Pages Dashboard > Settings > Environment Variables
-   - No necesitas configurar nada, D1 se conecta automáticamente
+   - Build command: `npm run build:cloudflare`
+   - Build output directory: `.vercel/output/static`
+   - Root directory: `/`
+3. Configura el binding de D1:
+   - En Cloudflare Pages Dashboard > Settings > Functions
+   - Agrega el binding D1: `DB` -> `clases-db` (database_id: 5ebf2f88-4c0c-4766-85ef-2c5b65ed87e2)
 
 ### 7. Ejecutar migraciones en producción
 ```bash
 npm run db:migrate:remote
 ```
+
+## URL de Producción
+
+- **Deploy actual**: https://36ecf086.clases-bot.pages.dev
+- **URL personalizada**: Configura un dominio personalizado desde Cloudflare Pages Dashboard
 
 ## Credenciales de Acceso
 
