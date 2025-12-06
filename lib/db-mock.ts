@@ -101,7 +101,7 @@ class MockDB {
             const mockData = getMockData();
             if (query.includes('SELECT') && query.includes('WHERE')) {
               if (query.includes('usuario') && query.includes('id')) {
-                const usuario = mockData.usuarios.find(u => u.id === parseInt(params[0]));
+                const usuario = mockData.usuarios.find((u: any) => u.id === parseInt(params[0]));
                 if (!usuario) return null;
                 // Usar la función de normalización (definida en getMockData)
                 const normalized = normalizeUsuario(usuario);
@@ -130,7 +130,7 @@ class MockDB {
               // Aplicar ORDER BY si existe en la query
               if (query.includes('ORDER BY')) {
                 if (query.includes('ORDER BY apellido, nombre')) {
-                  results.sort((a, b) => {
+                  results.sort((a: any, b: any) => {
                     const apellidoCompare = (a.apellido || '').localeCompare(b.apellido || '');
                     if (apellidoCompare !== 0) return apellidoCompare;
                     return (a.nombre || '').localeCompare(b.nombre || '');
@@ -147,7 +147,7 @@ class MockDB {
               // Aplicar ORDER BY si existe
               if (query.includes('ORDER BY dia, hora')) {
                 const ordenDias: { [key: string]: number } = { 'Lun': 1, 'Mar': 2, 'Jue': 3, 'Sab': 4 };
-                results.sort((a, b) => {
+                results.sort((a: any, b: any) => {
                   const diaA = ordenDias[a.dia] || 99;
                   const diaB = ordenDias[b.dia] || 99;
                   if (diaA !== diaB) return diaA - diaB;
@@ -164,8 +164,8 @@ class MockDB {
               // Si hay JOIN, construir resultados con datos relacionados
               if (query.includes('JOIN usuario') || query.includes('JOIN clase')) {
                 for (const reserva of mockData.reservas) {
-                  const usuario = mockData.usuarios.find(u => u.id === reserva.usuario_id);
-                  const clase = mockData.clases.find(c => c.id === reserva.clase_id);
+                  const usuario = mockData.usuarios.find((u: any) => u.id === reserva.usuario_id);
+                  const clase = mockData.clases.find((c: any) => c.id === reserva.clase_id);
                   
                   if (usuario && clase) {
                     results.push({
@@ -187,10 +187,10 @@ class MockDB {
               if (query.includes('WHERE')) {
                 if (params.length > 0) {
                   if (query.includes('r.usuario_id = ?')) {
-                    results = results.filter(r => r.usuario_id === parseInt(params[0]));
+                    results = results.filter((r: any) => r.usuario_id === parseInt(params[0]));
                   }
                   if (query.includes('r.clase_id = ?')) {
-                    results = results.filter(r => r.clase_id === parseInt(params[0]));
+                    results = results.filter((r: any) => r.clase_id === parseInt(params[0]));
                   }
                 }
               }
@@ -199,7 +199,7 @@ class MockDB {
               if (query.includes('ORDER BY')) {
                 if (query.includes('ORDER BY c.dia, c.hora')) {
                   const ordenDias: { [key: string]: number } = { 'Lun': 1, 'Mar': 2, 'Jue': 3, 'Sab': 4 };
-                  results.sort((a, b) => {
+                  results.sort((a: any, b: any) => {
                     const diaA = ordenDias[a.dia] || 99;
                     const diaB = ordenDias[b.dia] || 99;
                     if (diaA !== diaB) return diaA - diaB;
@@ -221,7 +221,7 @@ class MockDB {
               
               // Generar ID autoincremental
               const maxId = mockData.usuarios.length > 0 
-                ? Math.max(...mockData.usuarios.map(u => (u.id || 0)))
+                ? Math.max(...mockData.usuarios.map((u: any) => (u.id || 0)))
                 : 0;
               
               // Debug: verificar parámetros recibidos
@@ -364,7 +364,7 @@ class MockDB {
             if (query.includes('INSERT INTO clase')) {
               // Generar ID autoincremental
               const maxId = mockData.clases.length > 0 
-                ? Math.max(...mockData.clases.map(c => c.id || 0))
+                ? Math.max(...mockData.clases.map((c: any) => c.id || 0))
                 : 0;
               const clase = {
                 id: maxId + 1,
@@ -374,7 +374,7 @@ class MockDB {
               };
               // Verificar si ya existe (dia + hora único)
               const exists = mockData.clases.findIndex(
-                c => c.dia === clase.dia && c.hora === clase.hora
+                (c: any) => c.dia === clase.dia && c.hora === clase.hora
               );
               if (exists === -1) {
                 mockData.clases.push(clase);
@@ -397,7 +397,7 @@ class MockDB {
               };
               // Verificar si ya existe
               const exists = mockData.reservas.findIndex(
-                r => r.usuario_id === reserva.usuario_id && r.clase_id === reserva.clase_id
+                (r: any) => r.usuario_id === reserva.usuario_id && r.clase_id === reserva.clase_id
               );
               if (exists === -1) {
                 mockData.reservas.push(reserva);
@@ -413,12 +413,12 @@ class MockDB {
             }
             if (query.includes('UPDATE usuario')) {
               const id = params[4]; // último parámetro es el ID
-              const index = mockData.usuarios.findIndex(u => u.id === id);
+              const index = mockData.usuarios.findIndex((u: any) => u.id === id);
               if (index !== -1) {
                 const nuevoEmail = params[2]?.toLowerCase().trim() || params[2];
                 // Verificar si el email ya existe en otro usuario (no el que se está editando)
                 const emailExiste = mockData.usuarios.findIndex(
-                  (u, i) => i !== index && u.email?.toLowerCase().trim() === nuevoEmail
+                  (u: any, i: number) => i !== index && u.email?.toLowerCase().trim() === nuevoEmail
                 );
                 if (emailExiste === -1) {
                   mockData.usuarios[index] = {
@@ -453,7 +453,7 @@ class MockDB {
             }
             if (query.includes('DELETE FROM usuario')) {
               const beforeCount = mockData.usuarios.length;
-              mockData.usuarios = mockData.usuarios.filter(u => u.id !== parseInt(params[0]));
+              mockData.usuarios = mockData.usuarios.filter((u: any) => u.id !== parseInt(params[0]));
               const changes = beforeCount - mockData.usuarios.length;
               return {
                 success: true,
@@ -463,12 +463,12 @@ class MockDB {
               };
             }
             if (query.includes('DELETE FROM clase')) {
-              mockData.clases = mockData.clases.filter(c => c.id !== parseInt(params[0]));
+              mockData.clases = mockData.clases.filter((c: any) => c.id !== parseInt(params[0]));
             }
             if (query.includes('DELETE FROM reserva')) {
               const beforeCount = mockData.reservas.length;
               mockData.reservas = mockData.reservas.filter(
-                r => !(r.usuario_id === parseInt(params[0]) && r.clase_id === parseInt(params[1]))
+                (r: any) => !(r.usuario_id === parseInt(params[0]) && r.clase_id === parseInt(params[1]))
               );
               const changes = beforeCount - mockData.reservas.length;
               return {
@@ -522,7 +522,7 @@ class MockDB {
           // Aplicar ORDER BY si existe en la query
           if (query.includes('ORDER BY')) {
             if (query.includes('ORDER BY apellido, nombre')) {
-              results.sort((a, b) => {
+              results.sort((a: any, b: any) => {
                 const apellidoCompare = (a.apellido || '').localeCompare(b.apellido || '');
                 if (apellidoCompare !== 0) return apellidoCompare;
                 return (a.nombre || '').localeCompare(b.nombre || '');
@@ -556,8 +556,8 @@ class MockDB {
           // Si hay JOIN, construir resultados con datos relacionados
           if (query.includes('JOIN usuario') || query.includes('JOIN clase')) {
             for (const reserva of mockData.reservas) {
-              const usuario = mockData.usuarios.find(u => u.id === reserva.usuario_id);
-              const clase = mockData.clases.find(c => c.id === reserva.clase_id);
+              const usuario = mockData.usuarios.find((u: any) => u.id === reserva.usuario_id);
+              const clase = mockData.clases.find((c: any) => c.id === reserva.clase_id);
               
               if (usuario && clase) {
                 results.push({
