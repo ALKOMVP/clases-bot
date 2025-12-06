@@ -52,54 +52,26 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const envInfo = getEnvironmentInfo();
-  console.log('[POST /api/usuarios] Starting request', { environment: envInfo.environment });
+  console.log('[POST /api/usuarios] Starting request');
   
   try {
-    // En OpenNext, los bindings están disponibles a través del contexto de Cloudflare
-    let db: any = null;
-    
     // Acceder al contexto de Cloudflare de la misma forma que /api/test
     const cloudflareContext = (globalThis as any)[Symbol.for('__cloudflare-context__')];
-    db = cloudflareContext?.env?.DB;
+    const db = cloudflareContext?.env?.DB;
     
-    console.log('[POST /api/usuarios] Cloudflare context check', {
+    console.log('[POST /api/usuarios] Context check', {
       hasContext: !!cloudflareContext,
       hasEnv: !!cloudflareContext?.env,
       hasDB: !!db,
-      dbType: typeof db,
-      hasPrepare: typeof db?.prepare === 'function',
       envKeys: cloudflareContext?.env ? Object.keys(cloudflareContext.env) : []
     });
     
     if (!db) {
-      // Si no hay DB en el contexto, intentar obtenerla de otra forma
-      console.warn('[POST /api/usuarios] DB not found in Cloudflare context, checking alternatives');
-      
-      // En desarrollo local, usar mock DB
-      const isDevelopment = typeof process !== 'undefined' && process.env.NODE_ENV === 'development';
-      if (isDevelopment) {
-        db = getMockDBInstance();
-        console.log('[POST /api/usuarios] Using mock DB (development only)');
-      } else {
-        // En producción, si no hay DB, devolver error
-        console.error('[POST /api/usuarios] DB not available in production - Cloudflare context missing');
-        return NextResponse.json({ 
-          error: 'Base de datos no disponible',
-          details: 'El binding de D1 no está disponible en el contexto de Cloudflare. Verifica la configuración del binding en Cloudflare Pages.'
-        }, { status: 503 });
-      }
-    } else {
-      console.log('[POST /api/usuarios] DB obtained from Cloudflare context (OpenNext)');
-    }
-    
-    // Verificar que la DB esté disponible
-    if (!db || typeof db.prepare !== 'function') {
-      console.error('[POST /api/usuarios] DB is invalid', { 
-        hasDB: !!db,
-        hasPrepare: typeof db?.prepare === 'function'
-      });
-      return NextResponse.json({ error: 'Base de datos no disponible' }, { status: 503 });
+      console.error('[POST /api/usuarios] DB not available');
+      return NextResponse.json({ 
+        error: 'Base de datos no disponible',
+        details: 'El binding de D1 no está disponible'
+      }, { status: 503 });
     }
 
     const { nombre, apellido, email, fecha_alta } = await request.json();
@@ -108,7 +80,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Faltan campos requeridos' }, { status: 400 });
     }
 
-    // Ejecutar INSERT
+    // Ejecutar INSERT directamente
     const result = await db.prepare(
       'INSERT INTO usuario (nombre, apellido, email, fecha_alta) VALUES (?, ?, ?, ?)'
     ).bind(nombre, apellido, email, fecha_alta || null).run();
