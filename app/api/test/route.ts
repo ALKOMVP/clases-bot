@@ -8,7 +8,10 @@ export async function GET() {
   return Response.json({ 
     message: 'API works!', 
     timestamp: Date.now(),
-    hasDB: !!db
+    hasDB: !!db,
+    hasContext: !!cloudflareContext,
+    hasEnv: !!cloudflareContext?.env,
+    envKeys: cloudflareContext?.env ? Object.keys(cloudflareContext.env) : []
   });
 }
 
