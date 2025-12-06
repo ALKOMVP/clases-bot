@@ -1,11 +1,13 @@
 import { NextResponse } from 'next/server';
-import { getOptionalRequestContext } from '@cloudflare/next-on-pages';
 
 /**
  * Detecta si estamos en Cloudflare Pages
+ * Usa importación dinámica para evitar errores en build time
  */
 export function isCloudflareEnvironment(): boolean {
   try {
+    // Importación dinámica para evitar errores en build
+    const { getOptionalRequestContext } = require('@cloudflare/next-on-pages');
     const context = getOptionalRequestContext();
     return !!context?.env;
   } catch {

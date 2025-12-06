@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getOptionalRequestContext } from '@cloudflare/next-on-pages';
 import { getDB } from '@/lib/db';
 import { getMockDBInstance } from '@/lib/db-mock';
 import { createErrorResponse, checkDatabaseAvailability, getEnvironmentInfo } from '@/lib/error-handler';
@@ -16,6 +15,8 @@ export async function GET(request: NextRequest) {
     let db: any = null;
     
     try {
+      // Importación dinámica para evitar errores en build time
+      const { getOptionalRequestContext } = await import('@cloudflare/next-on-pages');
       const context = getOptionalRequestContext();
       if (context?.env && (context.env as any).DB) {
         db = (context.env as any).DB;
@@ -78,6 +79,7 @@ export async function POST(request: NextRequest) {
     let db: any = null;
     
     try {
+      const { getOptionalRequestContext } = await import('@cloudflare/next-on-pages');
       const context = getOptionalRequestContext();
       if (context?.env && (context.env as any).DB) {
         db = (context.env as any).DB;
@@ -142,6 +144,7 @@ export async function PUT(request: NextRequest) {
     let db: any = null;
     
     try {
+      const { getOptionalRequestContext } = await import('@cloudflare/next-on-pages');
       const context = getOptionalRequestContext();
       if (context?.env && (context.env as any).DB) {
         db = (context.env as any).DB;
@@ -200,6 +203,7 @@ export async function DELETE(request: NextRequest) {
     let db: any = null;
     
     try {
+      const { getOptionalRequestContext } = await import('@cloudflare/next-on-pages');
       const context = getOptionalRequestContext();
       if (context?.env && (context.env as any).DB) {
         db = (context.env as any).DB;
