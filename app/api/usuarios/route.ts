@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDB } from '@/lib/db';
 
-export const runtime = 'edge';
-
 export async function GET(request: NextRequest) {
   try {
     // En Cloudflare Pages, el binding D1 está disponible en process.env.DB
