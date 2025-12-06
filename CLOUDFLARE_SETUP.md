@@ -14,6 +14,7 @@ La forma más fácil de configurar todo automáticamente es conectar el proyecto
    - **Build output directory**: `.vercel/output/static`
    - **Root directory**: `/` (dejar vacío)
    - **Node.js version**: 20.x (o la más reciente disponible)
+   - **Deploy command**: `echo "Deploy completed"` (o `true` - Cloudflare Pages hace el deploy automáticamente, este comando solo satisface el campo requerido)
 6. En **"Environment variables"**: No necesitas agregar nada
 7. Click en **"Save and Deploy"**
 
