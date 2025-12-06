@@ -1,7 +1,7 @@
 {
   "version": 4,
   "routes": {
-    "/reservas": {
+    "/clases": {
       "experimentalBypassFor": [
         {
           "type": "header",
@@ -14,32 +14,8 @@
         }
       ],
       "initialRevalidateSeconds": false,
-      "srcRoute": "/reservas",
-      "dataRoute": "/reservas.rsc",
-      "allowHeader": [
-        "host",
-        "x-matched-path",
-        "x-prerender-revalidate",
-        "x-prerender-revalidate-if-generated",
-        "x-next-revalidated-tags",
-        "x-next-revalidate-tag-token"
-      ]
-    },
-    "/usuarios": {
-      "experimentalBypassFor": [
-        {
-          "type": "header",
-          "key": "Next-Action"
-        },
-        {
-          "type": "header",
-          "key": "content-type",
-          "value": "multipart/form-data;.*"
-        }
-      ],
-      "initialRevalidateSeconds": false,
-      "srcRoute": "/usuarios",
-      "dataRoute": "/usuarios.rsc",
+      "srcRoute": "/clases",
+      "dataRoute": "/clases.rsc",
       "allowHeader": [
         "host",
         "x-matched-path",
@@ -73,6 +49,30 @@
         "x-next-revalidate-tag-token"
       ]
     },
+    "/usuarios": {
+      "experimentalBypassFor": [
+        {
+          "type": "header",
+          "key": "Next-Action"
+        },
+        {
+          "type": "header",
+          "key": "content-type",
+          "value": "multipart/form-data;.*"
+        }
+      ],
+      "initialRevalidateSeconds": false,
+      "srcRoute": "/usuarios",
+      "dataRoute": "/usuarios.rsc",
+      "allowHeader": [
+        "host",
+        "x-matched-path",
+        "x-prerender-revalidate",
+        "x-prerender-revalidate-if-generated",
+        "x-next-revalidated-tags",
+        "x-next-revalidate-tag-token"
+      ]
+    },
     "/": {
       "experimentalBypassFor": [
         {
@@ -97,7 +97,7 @@
         "x-next-revalidate-tag-token"
       ]
     },
-    "/clases": {
+    "/reservas": {
       "experimentalBypassFor": [
         {
           "type": "header",
@@ -110,8 +110,8 @@
         }
       ],
       "initialRevalidateSeconds": false,
-      "srcRoute": "/clases",
-      "dataRoute": "/clases.rsc",
+      "srcRoute": "/reservas",
+      "dataRoute": "/reservas.rsc",
       "allowHeader": [
         "host",
         "x-matched-path",
