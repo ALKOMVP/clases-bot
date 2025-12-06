@@ -46,15 +46,26 @@ export function getDB(env?: { DB?: D1Database }): D1Database | null {
   
   // Para producción en Cloudflare Pages (Edge runtime)
   // El binding D1 está disponible en process.env.DB cuando está configurado en Cloudflare Pages
+  // Intentar múltiples formas de acceso para compatibilidad
   if (typeof process !== 'undefined') {
+    // Primero intentar process.env.DB (forma estándar)
     const db = (process.env as any).DB;
     if (db) {
       return db;
     }
+    
+    // Intentar a través de globalThis (algunas versiones de next-on-pages)
+    if (typeof globalThis !== 'undefined' && (globalThis as any).DB) {
+      return (globalThis as any).DB;
+    }
+    
+    // Intentar a través de global (Node.js compatibility)
+    if (typeof global !== 'undefined' && (global as any).DB) {
+      return (global as any).DB;
+    }
   }
   
   // Si estamos en Edge runtime y no hay process, intentar obtener del contexto global
-  // Esto puede ser necesario en algunos casos de Cloudflare Pages
   if (typeof globalThis !== 'undefined' && (globalThis as any).DB) {
     return (globalThis as any).DB;
   }

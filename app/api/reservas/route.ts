@@ -7,9 +7,15 @@ export const runtime = 'edge';
 export async function GET(request: NextRequest) {
   try {
     // En Cloudflare Pages, el binding D1 está disponible en process.env.DB
-    const db = getDB({ DB: (process.env as any).DB });
+    const db = getDB({ 
+      DB: (process.env as any).DB || 
+          (typeof globalThis !== 'undefined' ? (globalThis as any).DB : undefined) ||
+          (typeof global !== 'undefined' ? (global as any).DB : undefined)
+    });
     if (!db) {
-      return NextResponse.json({ error: 'DB not available' }, { status: 500 });
+      return NextResponse.json({ 
+        error: 'Database not available. Please configure D1 binding in Cloudflare Pages dashboard.' 
+      }, { status: 500 });
     }
 
     const { searchParams } = new URL(request.url);
@@ -67,9 +73,15 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     // En Cloudflare Pages, el binding D1 está disponible en process.env.DB
-    const db = getDB({ DB: (process.env as any).DB });
+    const db = getDB({ 
+      DB: (process.env as any).DB || 
+          (typeof globalThis !== 'undefined' ? (globalThis as any).DB : undefined) ||
+          (typeof global !== 'undefined' ? (global as any).DB : undefined)
+    });
     if (!db) {
-      return NextResponse.json({ error: 'DB not available' }, { status: 500 });
+      return NextResponse.json({ 
+        error: 'Database not available. Please configure D1 binding in Cloudflare Pages dashboard.' 
+      }, { status: 500 });
     }
 
     const { usuario_id, clase_id } = await request.json();
@@ -95,9 +107,15 @@ export async function POST(request: NextRequest) {
 export async function DELETE(request: NextRequest) {
   try {
     // En Cloudflare Pages, el binding D1 está disponible en process.env.DB
-    const db = getDB({ DB: (process.env as any).DB });
+    const db = getDB({ 
+      DB: (process.env as any).DB || 
+          (typeof globalThis !== 'undefined' ? (globalThis as any).DB : undefined) ||
+          (typeof global !== 'undefined' ? (global as any).DB : undefined)
+    });
     if (!db) {
-      return NextResponse.json({ error: 'DB not available' }, { status: 500 });
+      return NextResponse.json({ 
+        error: 'Database not available. Please configure D1 binding in Cloudflare Pages dashboard.' 
+      }, { status: 500 });
     }
 
     const { searchParams } = new URL(request.url);
