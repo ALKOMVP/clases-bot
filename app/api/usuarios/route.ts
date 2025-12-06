@@ -83,7 +83,8 @@ export async function POST(request: NextRequest) {
         dbType: typeof db,
         hasPrepare: typeof db?.prepare === 'function'
       });
-      return NextResponse.json({ error: 'Database not available' }, { status: 503 });
+      // Usar un mensaje que NO sea detectado por createErrorResponse
+      return NextResponse.json({ error: 'Database binding unavailable' }, { status: 503 });
     }
 
     const body = await request.json();
