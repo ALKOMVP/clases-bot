@@ -78,16 +78,16 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { nombre, apellido, email, fecha_alta } = body;
+    const { nombre, apellido, email, telefono, fecha_alta } = body;
 
-    if (!nombre || !apellido || !email) {
+    if (!nombre || !apellido || !email || !telefono) {
       return NextResponse.json({ error: 'Faltan campos requeridos' }, { status: 400 });
     }
 
     // Ejecutar INSERT directamente - mismo patrón que GET
     const result = await db.prepare(
-      'INSERT INTO usuario (nombre, apellido, email, fecha_alta) VALUES (?, ?, ?, ?)'
-    ).bind(nombre, apellido, email, fecha_alta || null).run();
+      'INSERT INTO usuario (nombre, apellido, email, telefono, fecha_alta) VALUES (?, ?, ?, ?, ?)'
+    ).bind(nombre, apellido, email, telefono, fecha_alta || null).run();
     
     const lastRowId = result && typeof result === 'object' 
       ? (result as any).meta?.last_row_id || (result as any).last_row_id
@@ -133,15 +133,15 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'Base de datos no disponible' }, { status: 503 });
     }
 
-    const { id, nombre, apellido, email, fecha_alta } = await request.json();
+    const { id, nombre, apellido, email, telefono, fecha_alta } = await request.json();
 
-    if (!id || !nombre || !apellido || !email) {
+    if (!id || !nombre || !apellido || !email || !telefono) {
       return NextResponse.json({ error: 'Faltan campos requeridos' }, { status: 400 });
     }
 
     await db.prepare(
-      'UPDATE usuario SET nombre = ?, apellido = ?, email = ?, fecha_alta = ? WHERE id = ?'
-    ).bind(nombre, apellido, email, fecha_alta, id).run();
+      'UPDATE usuario SET nombre = ?, apellido = ?, email = ?, telefono = ?, fecha_alta = ? WHERE id = ?'
+    ).bind(nombre, apellido, email, telefono, fecha_alta, id).run();
 
     console.log('[PUT /api/usuarios] Success', { id });
     return NextResponse.json({ success: true });

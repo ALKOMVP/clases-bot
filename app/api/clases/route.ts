@@ -49,7 +49,34 @@ export async function GET(request: NextRequest) {
     }
 
     const result = await db.prepare('SELECT * FROM clase ORDER BY dia, hora').all();
-    const clases = (result?.results || []) as any[];
+    let clases = (result?.results || []) as any[];
+    
+    // Si no hay clases, inicializarlas automáticamente
+    if (clases.length === 0) {
+      console.log('[GET /api/clases] No hay clases, inicializando automáticamente...');
+      try {
+        // Insertar todas las clases fijas
+        for (const clase of CLASES_FIJAS) {
+          try {
+            await db.prepare(
+              'INSERT INTO clase (dia, hora, nombre) VALUES (?, ?, ?)'
+            ).bind(clase.dia, clase.hora, clase.nombre).run();
+          } catch (error: any) {
+            // Ignorar errores de duplicados (por si acaso)
+            if (!error.message?.includes('UNIQUE constraint')) {
+              console.error('[GET /api/clases] Error al inicializar clase:', error);
+            }
+          }
+        }
+        // Volver a obtener las clases después de inicializarlas
+        const newResult = await db.prepare('SELECT * FROM clase ORDER BY dia, hora').all();
+        clases = (newResult?.results || []) as any[];
+        console.log('[GET /api/clases] Clases inicializadas automáticamente', { count: clases.length });
+      } catch (error: any) {
+        console.error('[GET /api/clases] Error al inicializar clases automáticamente:', error);
+        // Continuar aunque haya error, devolver array vacío
+      }
+    }
     
     // Ordenar manualmente por día
     const ordenDias: { [key: string]: number } = { 'Lun': 1, 'Mar': 2, 'Jue': 3, 'Sab': 4 };

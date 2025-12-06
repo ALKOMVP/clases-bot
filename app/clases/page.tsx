@@ -284,7 +284,7 @@ export default function ClasesPage() {
               Las clases semanales fijas son:
             </p>
             <div className="text-left max-w-md mx-auto space-y-2 text-sm">
-              <div><strong>Lunes:</strong> 17:30</div>
+              <div><strong>Lunes:</strong> 17:30, 19:00</div>
               <div><strong>Martes:</strong> 10:00, 17:30, 19:00</div>
               <div><strong>Jueves:</strong> 10:00, 16:00, 17:30, 19:00</div>
               <div><strong>Sábado:</strong> 09:30, 11:00</div>

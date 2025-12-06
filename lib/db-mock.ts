@@ -216,8 +216,8 @@ class MockDB {
             const mockData = getMockData();
             try {
               if (query.includes('INSERT INTO usuario')) {
-              // El orden de los parámetros es: nombre, apellido, email, fecha_alta
-              // según: INSERT INTO usuario (nombre, apellido, email, fecha_alta) VALUES (?, ?, ?, ?)
+              // El orden de los parámetros es: nombre, apellido, email, telefono, fecha_alta
+              // según: INSERT INTO usuario (nombre, apellido, email, telefono, fecha_alta) VALUES (?, ?, ?, ?, ?)
               
               // Generar ID autoincremental
               const maxId = mockData.usuarios.length > 0 
@@ -228,8 +228,8 @@ class MockDB {
               console.log('INSERT usuario - Parámetros recibidos:', params);
               console.log('INSERT usuario - Número de parámetros:', params.length);
               
-              // Asegurar que tenemos al menos 3 parámetros (nombre, apellido, email)
-              if (params.length < 3) {
+              // Asegurar que tenemos al menos 4 parámetros (nombre, apellido, email, telefono)
+              if (params.length < 4) {
                 throw new Error('Faltan parámetros requeridos');
               }
               
@@ -237,10 +237,11 @@ class MockDB {
               const nombre = String(params[0] || '').trim();
               const apellido = String(params[1] || '').trim();
               const email = String(params[2] || '').toLowerCase().trim();
-              const fechaAlta = params[3] ? String(params[3]).trim() : new Date().toISOString().split('T')[0];
+              const telefono = String(params[3] || '').trim();
+              const fechaAlta = params[4] ? String(params[4]).trim() : new Date().toISOString().split('T')[0];
               
               // Debug: verificar valores extraídos
-              console.log('INSERT usuario - Valores extraídos:', { nombre, apellido, email, fechaAlta });
+              console.log('INSERT usuario - Valores extraídos:', { nombre, apellido, email, telefono, fechaAlta });
               
               // Validar que nombre y apellido no sean emails
               if (nombre.includes('@')) {
@@ -253,7 +254,7 @@ class MockDB {
               }
               
               // Validar que los campos requeridos no estén vacíos
-              if (!nombre || !apellido || !email) {
+              if (!nombre || !apellido || !email || !telefono) {
                 throw new Error('Faltan campos requeridos');
               }
               
@@ -276,6 +277,7 @@ class MockDB {
               usuario.nombre = nombre;
               usuario.apellido = apellido;
               usuario.email = email;
+              usuario.telefono = telefono;
               usuario.fecha_alta = fechaAlta;
               // NO incluir ningún otro campo (especialmente dni)
               
@@ -283,7 +285,7 @@ class MockDB {
               console.log('INSERT usuario - Usuario creado:', usuario);
               
               // Validar que el usuario tenga la estructura correcta antes de guardarlo
-              if (!usuario.id || !usuario.nombre || !usuario.apellido || !usuario.email) {
+              if (!usuario.id || !usuario.nombre || !usuario.apellido || !usuario.email || !usuario.telefono) {
                 throw new Error('Error al crear usuario: estructura inválida');
               }
               

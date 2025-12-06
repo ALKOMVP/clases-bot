@@ -2,24 +2,54 @@ import { NextResponse } from 'next/server';
 
 /**
  * Detecta si estamos en Cloudflare Pages
- * Verifica si el contexto de Cloudflare está disponible
+ * Verifica múltiples indicadores para detectar correctamente el entorno
  */
 export function isCloudflareEnvironment(): boolean {
-  // Verificar si el contexto de Cloudflare está disponible
+  // 1. Verificar si el contexto de Cloudflare está disponible (método más confiable)
   try {
     const cloudflareContext = (globalThis as any)[Symbol.for('__cloudflare-context__')];
     if (cloudflareContext?.env) {
       return true;
     }
   } catch (e) {
-    // Si hay error accediendo al contexto, no estamos en Cloudflare
+    // Si hay error accediendo al contexto, continuar con otros métodos
   }
   
-  // Fallback: verificar si estamos en un entorno de Cloudflare
-  // Cloudflare Pages siempre tiene ciertas propiedades disponibles
-  if (typeof globalThis !== 'undefined') {
-    // Verificar si hay indicadores de Cloudflare
-    if ((globalThis as any).caches || (globalThis as any).navigator?.userAgent?.includes('Cloudflare')) {
+  // 2. Verificar variables de entorno específicas de Cloudflare (más confiable)
+  if (typeof process !== 'undefined') {
+    // Estas variables solo existen en Cloudflare Pages/Workers
+    if (process.env.DEPLOYMENT_ID || 
+        process.env.CF_PAGES_URL || 
+        process.env.CF_PAGES || 
+        process.env.CF_PAGES_BRANCH ||
+        process.env.CF_PAGES_COMMIT_SHA) {
+      return true;
+    }
+    
+    // 3. Verificar si estamos explícitamente en desarrollo local
+    const isDevelopment = process.env.NODE_ENV === 'development' || 
+                         process.env.NEXTJS_ENV === 'development';
+    
+    // 4. Si estamos en producción (NODE_ENV === 'production') y NO es desarrollo,
+    // asumir que es Cloudflare (más seguro que asumir 'local' cuando no podemos determinarlo)
+    // Esto es importante porque en producción de Cloudflare, puede que no tengamos
+    // acceso al contexto de Cloudflare en el momento de la detección
+    if (process.env.NODE_ENV === 'production' && !isDevelopment) {
+      return true;
+    }
+    
+    // 5. Si tenemos process.env.DB y estamos en producción, probablemente es Cloudflare
+    // (en desarrollo local con 'npm run dev', normalmente no hay DB en process.env)
+    if ((process.env as any).DB && process.env.NODE_ENV === 'production') {
+      return true;
+    }
+  }
+  
+  // 6. Fallback: verificar propiedades globales de Cloudflare
+  // Cloudflare Workers/Pages tienen caches API disponible en el servidor
+  if (typeof globalThis !== 'undefined' && typeof window === 'undefined') {
+    if ((globalThis as any).caches && typeof (globalThis as any).caches.open === 'function') {
+      // Si estamos en el servidor (no hay window) y tenemos caches, probablemente es Cloudflare
       return true;
     }
   }

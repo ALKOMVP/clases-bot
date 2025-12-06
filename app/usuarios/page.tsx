@@ -9,6 +9,7 @@ interface Usuario {
   nombre: string;
   apellido: string;
   email: string;
+  telefono: string;
   fecha_alta: string;
 }
 
@@ -41,6 +42,7 @@ export default function UsuariosPage() {
     nombre: '',
     apellido: '',
     email: '',
+    telefono: '',
     fecha_alta: new Date().toISOString().split('T')[0],
   });
 
@@ -122,7 +124,7 @@ export default function UsuariosPage() {
     // Preparar datos para enviar
     const dataToSend = editing 
       ? formData  // PUT: incluir id
-      : { nombre: formData.nombre, apellido: formData.apellido, email: formData.email, fecha_alta: formData.fecha_alta }; // POST: sin id
+      : { nombre: formData.nombre, apellido: formData.apellido, email: formData.email, telefono: formData.telefono, fecha_alta: formData.fecha_alta }; // POST: sin id
     
     try {
       const res = await fetchWithErrorHandling(url, {
@@ -141,6 +143,7 @@ export default function UsuariosPage() {
         nombre: '',
         apellido: '',
         email: '',
+        telefono: '',
         fecha_alta: new Date().toISOString().split('T')[0],
       });
       loadUsuarios();
@@ -232,6 +235,7 @@ export default function UsuariosPage() {
       usuario.nombre.toLowerCase().includes(search) ||
       usuario.apellido.toLowerCase().includes(search) ||
       usuario.email.toLowerCase().includes(search) ||
+      (usuario.telefono || '').toLowerCase().includes(search) ||
       getClasesInscritas(usuario.id).toLowerCase().includes(search)
     );
   });
@@ -251,6 +255,7 @@ export default function UsuariosPage() {
                 nombre: '',
                 apellido: '',
                 email: '',
+                telefono: '',
                 fecha_alta: new Date().toISOString().split('T')[0],
               });
             }}
@@ -265,7 +270,7 @@ export default function UsuariosPage() {
           <div className="relative">
             <input
               type="text"
-              placeholder="Buscar por nombre, apellido, email o clases..."
+              placeholder="Buscar por nombre, apellido, email, teléfono o clases..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full px-4 py-2 pl-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
@@ -339,6 +344,19 @@ export default function UsuariosPage() {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Teléfono *
+                  </label>
+                  <input
+                    type="tel"
+                    value={formData.telefono}
+                    onChange={(e) => setFormData({ ...formData, telefono: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                    required
+                    placeholder="Ej: +54 11 1234-5678"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
                     Fecha de Alta
                   </label>
                   <input
@@ -379,6 +397,7 @@ export default function UsuariosPage() {
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Nombre</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Apellido</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Email</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Teléfono</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Clases Inscritas</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Acciones</th>
               </tr>
@@ -391,6 +410,7 @@ export default function UsuariosPage() {
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{usuario.nombre}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{usuario.apellido}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{usuario.email}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{usuario.telefono || '-'}</td>
                     <td className="px-6 py-4 text-sm text-gray-900">
                       <div className="max-w-xs truncate" title={clasesInscritas}>
                         {clasesInscritas}
