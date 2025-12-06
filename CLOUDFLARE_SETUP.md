@@ -12,12 +12,28 @@ Si ves URLs con `.workers.dev`, estás en la sección incorrecta.
 
 **Si ves URLs con `.workers.dev`, tu proyecto está como Worker. Necesitas crearlo como Page:**
 
+### ⚠️ IMPORTANTE: Cómo acceder a Pages (no Workers)
+
+**Si "Connect to Git" te redirige a crear un Worker, estás en la sección incorrecta:**
+
+1. **Usa el enlace directo a Pages:**
+   - Ve directamente a: https://dash.cloudflare.com/pages
+   - NO uses "Workers & Pages" del menú lateral
+
+2. **Desde el dashboard:**
+   - En el menú lateral izquierdo, busca **"Pages"** (debe estar separado de "Workers & Pages")
+   - Si solo ves "Workers & Pages", haz clic y luego busca la pestaña "Pages" dentro de esa sección
+
+3. **Verifica que estés en Pages:**
+   - La URL debe ser: `dash.cloudflare.com/pages` o `dash.cloudflare.com/.../pages`
+   - NO debe decir `workers` en la URL
+   - Debe decir "Pages" en el título de la página
+
 ### Pasos para crear el proyecto como Page:
 
 1. **Ve a la sección de Pages:**
-   - Ve a [Cloudflare Dashboard](https://dash.cloudflare.com)
-   - En el menú lateral, busca **"Pages"** (NO "Workers & Pages")
-   - O usa este enlace directo: https://dash.cloudflare.com/pages
+   - Usa este enlace directo: https://dash.cloudflare.com/pages
+   - O desde el dashboard: menú lateral > **"Pages"** (NO "Workers & Pages")
 
 2. **Crea un nuevo proyecto:**
    - Click en **"Create a project"** (botón azul)
