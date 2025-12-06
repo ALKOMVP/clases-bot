@@ -60,6 +60,13 @@ export async function POST(request: NextRequest) {
     let db: any = null;
     
     const cloudflareContext = (globalThis as any)[Symbol.for('__cloudflare-context__')];
+    console.log('[POST /api/usuarios] Cloudflare context check', {
+      hasContext: !!cloudflareContext,
+      hasEnv: !!cloudflareContext?.env,
+      hasDB: !!cloudflareContext?.env?.DB,
+      envKeys: cloudflareContext?.env ? Object.keys(cloudflareContext.env) : []
+    });
+    
     if (cloudflareContext?.env?.DB) {
       db = cloudflareContext.env.DB;
       console.log('[POST /api/usuarios] DB obtained from Cloudflare context (OpenNext)', {
@@ -67,20 +74,21 @@ export async function POST(request: NextRequest) {
         dbType: typeof db,
         hasPrepare: typeof db?.prepare === 'function'
       });
-    }
-    
-    // Solo usar mock DB si NO hay DB real disponible Y estamos en desarrollo
-    if (!db) {
+    } else {
+      // Si no hay DB en el contexto, intentar obtenerla de otra forma
+      console.warn('[POST /api/usuarios] DB not found in Cloudflare context, checking alternatives');
+      
+      // En desarrollo local, usar mock DB
       const isDevelopment = typeof process !== 'undefined' && process.env.NODE_ENV === 'development';
       if (isDevelopment) {
         db = getMockDBInstance();
         console.log('[POST /api/usuarios] Using mock DB (development only)');
       } else {
         // En producción, si no hay DB, devolver error
-        console.error('[POST /api/usuarios] DB not available in production');
+        console.error('[POST /api/usuarios] DB not available in production - Cloudflare context missing');
         return NextResponse.json({ 
           error: 'Base de datos no disponible',
-          details: 'El binding de D1 no está configurado correctamente'
+          details: 'El binding de D1 no está disponible en el contexto de Cloudflare'
         }, { status: 503 });
       }
     }
