@@ -7,11 +7,18 @@ export const runtime = 'edge';
 
 export async function GET(request: NextRequest) {
   try {
+    console.log('GET /api/usuarios - Iniciando request');
     // En Cloudflare Pages, el binding D1 está disponible a través de getOptionalRequestContext().env.DB
     const context = getOptionalRequestContext();
+    console.log('GET /api/usuarios - Context:', {
+      hasContext: !!context,
+      hasEnv: !!context?.env,
+      envKeys: context?.env ? Object.keys(context.env) : []
+    });
     const db = context?.env && (context.env as any).DB
       ? getDB({ DB: (context.env as any).DB })
       : getDB();
+    console.log('GET /api/usuarios - DB:', !!db);
     if (!db) {
       console.error('GET usuarios: DB not available', {
         hasContext: !!context,
@@ -36,9 +43,17 @@ export async function GET(request: NextRequest) {
     
     const usuarios = result?.results || [];
     return NextResponse.json(Array.isArray(usuarios) ? usuarios : []);
-  } catch (error) {
-    console.error('Error fetching usuarios:', error);
-    return NextResponse.json([], { status: 500 });
+  } catch (error: any) {
+    console.error('Error fetching usuarios:', {
+      message: error?.message,
+      stack: error?.stack,
+      name: error?.name,
+      error: String(error)
+    });
+    return NextResponse.json({ 
+      error: 'Error al obtener usuarios',
+      details: process.env.NODE_ENV === 'development' ? error?.message : undefined
+    }, { status: 500 });
   }
 }
 

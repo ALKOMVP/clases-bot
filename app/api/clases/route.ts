@@ -60,9 +60,17 @@ export async function GET(request: NextRequest) {
     });
 
     return NextResponse.json(clases);
-  } catch (error) {
-    console.error('Error fetching clases:', error);
-    return NextResponse.json([], { status: 500 });
+  } catch (error: any) {
+    console.error('Error fetching clases:', {
+      message: error?.message,
+      stack: error?.stack,
+      name: error?.name,
+      error: String(error)
+    });
+    return NextResponse.json({ 
+      error: 'Error al obtener clases',
+      details: process.env.NODE_ENV === 'development' ? error?.message : undefined
+    }, { status: 500 });
   }
 }
 
