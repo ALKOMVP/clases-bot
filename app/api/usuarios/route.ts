@@ -93,9 +93,28 @@ export async function POST(request: NextRequest) {
     console.log('[POST /api/usuarios] Success', { id: lastRowId });
     return NextResponse.json({ success: true, id: lastRowId });
   } catch (error: any) {
+    console.error('[POST /api/usuarios] Error caught:', {
+      message: error?.message,
+      name: error?.name,
+      stack: error?.stack,
+      error: String(error)
+    });
+    
     if (error.message?.includes('UNIQUE constraint')) {
       return NextResponse.json({ error: 'El email ya existe' }, { status: 400 });
     }
+    
+    // Si el error no es de base de datos, devolver error genérico
+    if (!error.message?.includes('Database') && 
+        !error.message?.includes('DB') && 
+        !error.message?.includes('D1') && 
+        !error.message?.includes('binding')) {
+      return NextResponse.json({ 
+        error: 'Error al crear usuario',
+        details: error?.message || String(error)
+      }, { status: 500 });
+    }
+    
     return createErrorResponse(
       error,
       'Error al crear usuario',
