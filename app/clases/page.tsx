@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Navbar from '@/components/Navbar';
+import { fetchWithErrorHandling } from '@/lib/frontend-error-handler';
 
 interface Clase {
   id: number;
@@ -27,15 +28,19 @@ export default function ClasesPage() {
 
   const loadClases = async () => {
     try {
-      const res = await fetch('/api/clases');
+      const res = await fetchWithErrorHandling('/api/clases', {}, {
+        route: '/api/clases',
+        operation: 'load_clases'
+      });
       const data = await res.json();
       if (Array.isArray(data)) {
         setClases(data);
       } else {
         setClases([]);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error loading clases:', error);
+      alert(error.message || 'Error al cargar clases');
       setClases([]);
     }
   };
@@ -45,21 +50,18 @@ export default function ClasesPage() {
     
     setLoading(true);
     try {
-      const res = await fetch('/api/clases', {
+      await fetchWithErrorHandling('/api/clases', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+      }, {
+        route: '/api/clases',
+        operation: 'initialize_clases'
       });
 
-      if (res.ok) {
-        alert('Clases inicializadas correctamente');
-        loadClases();
-      } else {
-        const error = await res.json();
-        alert(error.error || 'Error al inicializar clases');
-      }
-    } catch (error) {
-      console.error('Error initializing clases:', error);
-      alert('Error al inicializar clases');
+      alert('Clases inicializadas correctamente');
+      loadClases();
+    } catch (error: any) {
+      alert(error.message || 'Error al inicializar clases');
     } finally {
       setLoading(false);
     }
@@ -82,23 +84,20 @@ export default function ClasesPage() {
 
     setLoading(true);
     try {
-      const res = await fetch('/api/clases', {
+      await fetchWithErrorHandling('/api/clases', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData),
+      }, {
+        route: '/api/clases',
+        operation: 'create_clase'
       });
 
-      if (res.ok) {
-        setShowForm(false);
-        setFormData({ dia: 'Lun', hora: '', nombre: 'Yoga' });
-        loadClases();
-      } else {
-        const error = await res.json();
-        alert(error.error || 'Error al crear clase');
-      }
-    } catch (error) {
-      console.error('Error creating clase:', error);
-      alert('Error al crear clase');
+      setShowForm(false);
+      setFormData({ dia: 'Lun', hora: '', nombre: 'Yoga' });
+      loadClases();
+    } catch (error: any) {
+      alert(error.message || 'Error al crear clase');
     } finally {
       setLoading(false);
     }
@@ -108,16 +107,13 @@ export default function ClasesPage() {
     if (!confirm('¿Estás seguro de eliminar esta clase? Esto también eliminará todas las reservas asociadas.')) return;
 
     try {
-      const res = await fetch(`/api/clases?id=${id}`, { method: 'DELETE' });
-      if (res.ok) {
-        loadClases();
-      } else {
-        const error = await res.json();
-        alert(error.error || 'Error al eliminar');
-      }
-    } catch (error) {
-      console.error('Error deleting clase:', error);
-      alert('Error al eliminar');
+      await fetchWithErrorHandling(`/api/clases?id=${id}`, { method: 'DELETE' }, {
+        route: '/api/clases',
+        operation: 'delete_clase'
+      });
+      loadClases();
+    } catch (error: any) {
+      alert(error.message || 'Error al eliminar');
     }
   };
 

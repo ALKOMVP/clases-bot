@@ -2,11 +2,15 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getOptionalRequestContext } from '@cloudflare/next-on-pages';
 import { getDB } from '@/lib/db';
 import { getMockDBInstance } from '@/lib/db-mock';
+import { createErrorResponse, checkDatabaseAvailability, getEnvironmentInfo } from '@/lib/error-handler';
 
 // Edge runtime required for Cloudflare Pages
 export const runtime = 'edge';
 
 export async function GET(request: NextRequest) {
+  const envInfo = getEnvironmentInfo();
+  console.log('[GET /api/reservas] Starting request', { environment: envInfo.environment });
+  
   try {
     // Intentar obtener la BD del contexto de Cloudflare
     let db: any = null;
@@ -15,22 +19,30 @@ export async function GET(request: NextRequest) {
       const context = getOptionalRequestContext();
       if (context?.env && (context.env as any).DB) {
         db = (context.env as any).DB;
+        console.log('[GET /api/reservas] DB obtained from Cloudflare context');
       }
-    } catch (e) {
-      // getOptionalRequestContext no está disponible
+    } catch (e: any) {
+      console.warn('[GET /api/reservas] getOptionalRequestContext failed:', e?.message);
     }
     
     if (!db && typeof process !== 'undefined' && (process.env as any).DB) {
       db = (process.env as any).DB;
+      console.log('[GET /api/reservas] DB obtained from process.env');
     }
     
     if (!db) {
       if (typeof process !== 'undefined' && process.env.NODE_ENV === 'development') {
         db = getMockDBInstance();
+        console.log('[GET /api/reservas] Using mock DB (development)');
       } else {
-        console.warn('GET reservas: DB not available, returning empty array');
+        console.warn('[GET /api/reservas] DB not available, returning empty array');
         return NextResponse.json([]);
       }
+    }
+    
+    const dbCheck = checkDatabaseAvailability(db, '/api/reservas');
+    if (!dbCheck.available && dbCheck.error) {
+      return dbCheck.error;
     }
 
     const { searchParams } = new URL(request.url);
@@ -78,22 +90,21 @@ export async function GET(request: NextRequest) {
       return a.hora.localeCompare(b.hora);
     });
 
+    console.log('[GET /api/reservas] Success', { count: reservas.length });
     return NextResponse.json(reservas);
   } catch (error: any) {
-    console.error('Error fetching reservas:', {
-      message: error?.message,
-      stack: error?.stack,
-      name: error?.name,
-      error: String(error)
-    });
-    return NextResponse.json({ 
-      error: 'Error al obtener reservas',
-      details: process.env.NODE_ENV === 'development' ? error?.message : undefined
-    }, { status: 500 });
+    return createErrorResponse(
+      error,
+      'Error al obtener reservas',
+      { route: '/api/reservas', method: 'GET', operation: 'fetch_reservas' }
+    );
   }
 }
 
 export async function POST(request: NextRequest) {
+  const envInfo = getEnvironmentInfo();
+  console.log('[POST /api/reservas] Starting request', { environment: envInfo.environment });
+  
   try {
     // Intentar obtener la BD del contexto de Cloudflare
     let db: any = null;
@@ -102,22 +113,31 @@ export async function POST(request: NextRequest) {
       const context = getOptionalRequestContext();
       if (context?.env && (context.env as any).DB) {
         db = (context.env as any).DB;
+        console.log('[POST /api/reservas] DB obtained from Cloudflare context');
       }
-    } catch (e) {
-      // getOptionalRequestContext no está disponible
+    } catch (e: any) {
+      console.warn('[POST /api/reservas] getOptionalRequestContext failed:', e?.message);
     }
     
     if (!db && typeof process !== 'undefined' && (process.env as any).DB) {
       db = (process.env as any).DB;
+      console.log('[POST /api/reservas] DB obtained from process.env');
     }
     
     if (!db) {
       if (typeof process !== 'undefined' && process.env.NODE_ENV === 'development') {
         db = getMockDBInstance();
+        console.log('[POST /api/reservas] Using mock DB (development)');
       } else {
-        console.warn('GET reservas: DB not available, returning empty array');
+        const dbCheck = checkDatabaseAvailability(db, '/api/reservas');
+        if (dbCheck.error) return dbCheck.error;
         return NextResponse.json([]);
       }
+    }
+    
+    const dbCheck = checkDatabaseAvailability(db, '/api/reservas');
+    if (!dbCheck.available && dbCheck.error) {
+      return dbCheck.error;
     }
 
     const { usuario_id, clase_id } = await request.json();
@@ -130,17 +150,21 @@ export async function POST(request: NextRequest) {
       'INSERT INTO reserva (usuario_id, clase_id) VALUES (?, ?)'
     ).bind(usuario_id, clase_id).run();
 
+    console.log('[POST /api/reservas] Success', { usuario_id, clase_id });
     return NextResponse.json({ success: true });
   } catch (error: any) {
-    console.error('Error creating reserva:', error);
-    if (error.message?.includes('UNIQUE constraint')) {
-      return NextResponse.json({ error: 'El alumno ya está inscrito en esta clase' }, { status: 400 });
-    }
-    return NextResponse.json({ error: 'Error al crear reserva' }, { status: 500 });
+    return createErrorResponse(
+      error,
+      'Error al crear reserva',
+      { route: '/api/reservas', method: 'POST', operation: 'create_reserva' }
+    );
   }
 }
 
 export async function DELETE(request: NextRequest) {
+  const envInfo = getEnvironmentInfo();
+  console.log('[DELETE /api/reservas] Starting request', { environment: envInfo.environment });
+  
   try {
     // Intentar obtener la BD del contexto de Cloudflare
     let db: any = null;
@@ -149,22 +173,31 @@ export async function DELETE(request: NextRequest) {
       const context = getOptionalRequestContext();
       if (context?.env && (context.env as any).DB) {
         db = (context.env as any).DB;
+        console.log('[DELETE /api/reservas] DB obtained from Cloudflare context');
       }
-    } catch (e) {
-      // getOptionalRequestContext no está disponible
+    } catch (e: any) {
+      console.warn('[DELETE /api/reservas] getOptionalRequestContext failed:', e?.message);
     }
     
     if (!db && typeof process !== 'undefined' && (process.env as any).DB) {
       db = (process.env as any).DB;
+      console.log('[DELETE /api/reservas] DB obtained from process.env');
     }
     
     if (!db) {
       if (typeof process !== 'undefined' && process.env.NODE_ENV === 'development') {
         db = getMockDBInstance();
+        console.log('[DELETE /api/reservas] Using mock DB (development)');
       } else {
-        console.warn('GET reservas: DB not available, returning empty array');
+        const dbCheck = checkDatabaseAvailability(db, '/api/reservas');
+        if (dbCheck.error) return dbCheck.error;
         return NextResponse.json([]);
       }
+    }
+    
+    const dbCheck = checkDatabaseAvailability(db, '/api/reservas');
+    if (!dbCheck.available && dbCheck.error) {
+      return dbCheck.error;
     }
 
     const { searchParams } = new URL(request.url);
@@ -178,9 +211,13 @@ export async function DELETE(request: NextRequest) {
     await db.prepare('DELETE FROM reserva WHERE usuario_id = ? AND clase_id = ?')
       .bind(usuario_id, clase_id).run();
 
+    console.log('[DELETE /api/reservas] Success', { usuario_id, clase_id });
     return NextResponse.json({ success: true });
-  } catch (error) {
-    console.error('Error deleting reserva:', error);
-    return NextResponse.json({ error: 'Error al eliminar reserva' }, { status: 500 });
+  } catch (error: any) {
+    return createErrorResponse(
+      error,
+      'Error al eliminar reserva',
+      { route: '/api/reservas', method: 'DELETE', operation: 'delete_reserva' }
+    );
   }
 }

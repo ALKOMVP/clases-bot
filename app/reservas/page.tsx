@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Navbar from '@/components/Navbar';
+import { fetchWithErrorHandling } from '@/lib/frontend-error-handler';
 
 interface Reserva {
   usuario_id: number;
@@ -47,84 +48,101 @@ export default function ReservasPage() {
 
   const loadReservas = async () => {
     try {
-      const res = await fetch('/api/reservas');
+      const res = await fetchWithErrorHandling('/api/reservas', {}, {
+        route: '/api/reservas',
+        operation: 'load_reservas'
+      });
       const data = await res.json();
       if (Array.isArray(data)) {
         setReservas(data);
       } else {
         setReservas([]);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error loading reservas:', error);
+      alert(error.message || 'Error al cargar reservas');
       setReservas([]);
     }
   };
 
   const loadUsuarios = async () => {
     try {
-      const res = await fetch('/api/usuarios');
+      const res = await fetchWithErrorHandling('/api/usuarios', {}, {
+        route: '/api/usuarios',
+        operation: 'load_usuarios'
+      });
       const data = await res.json();
       if (Array.isArray(data)) {
         setUsuarios(data);
       } else {
         setUsuarios([]);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error loading usuarios:', error);
+      alert(error.message || 'Error al cargar usuarios');
       setUsuarios([]);
     }
   };
 
   const loadClases = async () => {
     try {
-      const res = await fetch('/api/clases');
+      const res = await fetchWithErrorHandling('/api/clases', {}, {
+        route: '/api/clases',
+        operation: 'load_clases'
+      });
       const data = await res.json();
       if (Array.isArray(data)) {
         setClases(data);
       } else {
         setClases([]);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error loading clases:', error);
+      alert(error.message || 'Error al cargar clases');
       setClases([]);
     }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const url = '/api/reservas';
-    const method = 'POST';
     
-    const res = await fetch(url, {
-      method,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        usuario_id: formData.usuario_id,
-        clase_id: formData.clase_id,
-      }),
-    });
+    try {
+      await fetchWithErrorHandling('/api/reservas', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          usuario_id: formData.usuario_id,
+          clase_id: formData.clase_id,
+        }),
+      }, {
+        route: '/api/reservas',
+        operation: 'create_reserva'
+      });
 
-    if (res.ok) {
       setShowForm(false);
       setFormData({
         usuario_id: 0,
         clase_id: 0,
       });
       loadReservas();
-    } else {
-      const error = await res.json();
-      alert(error.error || 'Error al guardar');
+    } catch (error: any) {
+      alert(error.message || 'Error al guardar');
     }
   };
 
   const handleDelete = async (usuario_id: number, clase_id: number) => {
     if (!confirm('¿Estás seguro de eliminar esta reserva?')) return;
 
-    const res = await fetch(`/api/reservas?usuario_id=${usuario_id}&clase_id=${clase_id}`, { method: 'DELETE' });
-    if (res.ok) {
+    try {
+      await fetchWithErrorHandling(`/api/reservas?usuario_id=${usuario_id}&clase_id=${clase_id}`, { 
+        method: 'DELETE' 
+      }, {
+        route: '/api/reservas',
+        operation: 'delete_reserva'
+      });
       loadReservas();
-    } else {
-      alert('Error al eliminar');
+    } catch (error: any) {
+      alert(error.message || 'Error al eliminar');
     }
   };
 

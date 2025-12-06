@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getOptionalRequestContext } from '@cloudflare/next-on-pages';
 import { getDB } from '@/lib/db';
 import { getMockDBInstance } from '@/lib/db-mock';
+import { createErrorResponse, checkDatabaseAvailability, getEnvironmentInfo } from '@/lib/error-handler';
 
 // Edge runtime required for Cloudflare Pages
 export const runtime = 'edge';
@@ -26,6 +27,9 @@ const CLASES_FIJAS = [
 ];
 
 export async function GET(request: NextRequest) {
+  const envInfo = getEnvironmentInfo();
+  console.log('[GET /api/clases] Starting request', { environment: envInfo.environment });
+  
   try {
     // Intentar obtener la BD del contexto de Cloudflare
     let db: any = null;
@@ -34,22 +38,30 @@ export async function GET(request: NextRequest) {
       const context = getOptionalRequestContext();
       if (context?.env && (context.env as any).DB) {
         db = (context.env as any).DB;
+        console.log('[GET /api/clases] DB obtained from Cloudflare context');
       }
-    } catch (e) {
-      // getOptionalRequestContext no está disponible
+    } catch (e: any) {
+      console.warn('[GET /api/clases] getOptionalRequestContext failed:', e?.message);
     }
     
     if (!db && typeof process !== 'undefined' && (process.env as any).DB) {
       db = (process.env as any).DB;
+      console.log('[GET /api/clases] DB obtained from process.env');
     }
     
     if (!db) {
       if (typeof process !== 'undefined' && process.env.NODE_ENV === 'development') {
         db = getMockDBInstance();
+        console.log('[GET /api/clases] Using mock DB (development)');
       } else {
-        console.warn('GET clases: DB not available, returning empty array');
+        console.warn('[GET /api/clases] DB not available, returning empty array');
         return NextResponse.json([]);
       }
+    }
+    
+    const dbCheck = checkDatabaseAvailability(db, '/api/clases');
+    if (!dbCheck.available && dbCheck.error) {
+      return dbCheck.error;
     }
 
     const { searchParams } = new URL(request.url);
@@ -74,23 +86,22 @@ export async function GET(request: NextRequest) {
       return a.hora.localeCompare(b.hora);
     });
 
+    console.log('[GET /api/clases] Success', { count: clases.length });
     return NextResponse.json(clases);
   } catch (error: any) {
-    console.error('Error fetching clases:', {
-      message: error?.message,
-      stack: error?.stack,
-      name: error?.name,
-      error: String(error)
-    });
-    return NextResponse.json({ 
-      error: 'Error al obtener clases',
-      details: process.env.NODE_ENV === 'development' ? error?.message : undefined
-    }, { status: 500 });
+    return createErrorResponse(
+      error,
+      'Error al obtener clases',
+      { route: '/api/clases', method: 'GET', operation: 'fetch_clases' }
+    );
   }
 }
 
 // Endpoint para crear una clase individual o inicializar las clases fijas
 export async function POST(request: NextRequest) {
+  const envInfo = getEnvironmentInfo();
+  console.log('[POST /api/clases] Starting request', { environment: envInfo.environment });
+  
   try {
     // Intentar obtener la BD del contexto de Cloudflare
     let db: any = null;
@@ -99,22 +110,31 @@ export async function POST(request: NextRequest) {
       const context = getOptionalRequestContext();
       if (context?.env && (context.env as any).DB) {
         db = (context.env as any).DB;
+        console.log('[POST /api/clases] DB obtained from Cloudflare context');
       }
-    } catch (e) {
-      // getOptionalRequestContext no está disponible
+    } catch (e: any) {
+      console.warn('[POST /api/clases] getOptionalRequestContext failed:', e?.message);
     }
     
     if (!db && typeof process !== 'undefined' && (process.env as any).DB) {
       db = (process.env as any).DB;
+      console.log('[POST /api/clases] DB obtained from process.env');
     }
     
     if (!db) {
       if (typeof process !== 'undefined' && process.env.NODE_ENV === 'development') {
         db = getMockDBInstance();
+        console.log('[POST /api/clases] Using mock DB (development)');
       } else {
-        console.warn('GET clases: DB not available, returning empty array');
+        const dbCheck = checkDatabaseAvailability(db, '/api/clases');
+        if (dbCheck.error) return dbCheck.error;
         return NextResponse.json([]);
       }
+    }
+    
+    const dbCheck = checkDatabaseAvailability(db, '/api/clases');
+    if (!dbCheck.available && dbCheck.error) {
+      return dbCheck.error;
     }
 
     const body = await request.json();
@@ -160,15 +180,22 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    console.log('[POST /api/clases] Success - Clases inicializadas');
     return NextResponse.json({ success: true, message: 'Clases inicializadas' });
   } catch (error: any) {
-    console.error('Error creating clases:', error);
-    return NextResponse.json({ error: 'Error al crear clases' }, { status: 500 });
+    return createErrorResponse(
+      error,
+      'Error al crear clases',
+      { route: '/api/clases', method: 'POST', operation: 'create_clases' }
+    );
   }
 }
 
 // Endpoint para eliminar una clase
 export async function DELETE(request: NextRequest) {
+  const envInfo = getEnvironmentInfo();
+  console.log('[DELETE /api/clases] Starting request', { environment: envInfo.environment });
+  
   try {
     // Intentar obtener la BD del contexto de Cloudflare
     let db: any = null;
@@ -177,22 +204,31 @@ export async function DELETE(request: NextRequest) {
       const context = getOptionalRequestContext();
       if (context?.env && (context.env as any).DB) {
         db = (context.env as any).DB;
+        console.log('[DELETE /api/clases] DB obtained from Cloudflare context');
       }
-    } catch (e) {
-      // getOptionalRequestContext no está disponible
+    } catch (e: any) {
+      console.warn('[DELETE /api/clases] getOptionalRequestContext failed:', e?.message);
     }
     
     if (!db && typeof process !== 'undefined' && (process.env as any).DB) {
       db = (process.env as any).DB;
+      console.log('[DELETE /api/clases] DB obtained from process.env');
     }
     
     if (!db) {
       if (typeof process !== 'undefined' && process.env.NODE_ENV === 'development') {
         db = getMockDBInstance();
+        console.log('[DELETE /api/clases] Using mock DB (development)');
       } else {
-        console.warn('GET clases: DB not available, returning empty array');
+        const dbCheck = checkDatabaseAvailability(db, '/api/clases');
+        if (dbCheck.error) return dbCheck.error;
         return NextResponse.json([]);
       }
+    }
+    
+    const dbCheck = checkDatabaseAvailability(db, '/api/clases');
+    if (!dbCheck.available && dbCheck.error) {
+      return dbCheck.error;
     }
 
     const { searchParams } = new URL(request.url);
@@ -204,9 +240,13 @@ export async function DELETE(request: NextRequest) {
 
     await db.prepare('DELETE FROM clase WHERE id = ?').bind(id).run();
 
+    console.log('[DELETE /api/clases] Success', { id });
     return NextResponse.json({ success: true });
-  } catch (error) {
-    console.error('Error deleting clase:', error);
-    return NextResponse.json({ error: 'Error al eliminar clase' }, { status: 500 });
+  } catch (error: any) {
+    return createErrorResponse(
+      error,
+      'Error al eliminar clase',
+      { route: '/api/clases', method: 'DELETE', operation: 'delete_clase' }
+    );
   }
 }
