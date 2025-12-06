@@ -1,14 +1,8 @@
-export const runtime = 'edge';
-
+// OpenNext no requiere runtime = 'edge' explícito
 export async function GET() {
-  return new Response(JSON.stringify({ 
+  return Response.json({ 
     message: 'API works!', 
     timestamp: Date.now() 
-  }), {
-    status: 200,
-    headers: {
-      'Content-Type': 'application/json',
-    },
   });
 }
 

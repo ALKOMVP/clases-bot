@@ -10,20 +10,6 @@ export async function GET(request: NextRequest) {
   const envInfo = getEnvironmentInfo();
   console.log('[GET /api/reservas] Starting request', { environment: envInfo.environment });
   
-  try {
-    // Intentar obtener la BD del contexto de Cloudflare
-    let db: any = null;
-    
-    try {
-      // Importación dinámica para evitar errores en build time
-      const { getOptionalRequestContext } = await import('@cloudflare/next-on-pages');
-      const context = getOptionalRequestContext();
-      if (context?.env && (context.env as any).DB) {
-        db = (context.env as any).DB;
-        console.log('[GET /api/reservas] DB obtained from Cloudflare context');
-      }
-    } catch (e: any) {
-      console.warn('[GET /api/reservas] getOptionalRequestContext failed:', e?.message);
     }
     
     if (!db && typeof process !== 'undefined' && (process.env as any).DB) {
@@ -106,20 +92,6 @@ export async function POST(request: NextRequest) {
   const envInfo = getEnvironmentInfo();
   console.log('[POST /api/reservas] Starting request', { environment: envInfo.environment });
   
-  try {
-    // Intentar obtener la BD del contexto de Cloudflare
-    let db: any = null;
-    
-    try {
-      // Importación dinámica para evitar errores en build time
-      const { getOptionalRequestContext } = await import('@cloudflare/next-on-pages');
-      const context = getOptionalRequestContext();
-      if (context?.env && (context.env as any).DB) {
-        db = (context.env as any).DB;
-        console.log('[POST /api/reservas] DB obtained from Cloudflare context');
-      }
-    } catch (e: any) {
-      console.warn('[POST /api/reservas] getOptionalRequestContext failed:', e?.message);
     }
     
     if (!db && typeof process !== 'undefined' && (process.env as any).DB) {
@@ -168,20 +140,6 @@ export async function DELETE(request: NextRequest) {
   const envInfo = getEnvironmentInfo();
   console.log('[DELETE /api/reservas] Starting request', { environment: envInfo.environment });
   
-  try {
-    // Intentar obtener la BD del contexto de Cloudflare
-    let db: any = null;
-    
-    try {
-      // Importación dinámica para evitar errores en build time
-      const { getOptionalRequestContext } = await import('@cloudflare/next-on-pages');
-      const context = getOptionalRequestContext();
-      if (context?.env && (context.env as any).DB) {
-        db = (context.env as any).DB;
-        console.log('[DELETE /api/reservas] DB obtained from Cloudflare context');
-      }
-    } catch (e: any) {
-      console.warn('[DELETE /api/reservas] getOptionalRequestContext failed:', e?.message);
     }
     
     if (!db && typeof process !== 'undefined' && (process.env as any).DB) {
