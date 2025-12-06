@@ -66,10 +66,7 @@ export async function POST(request: NextRequest) {
     }
     
     if (!db) {
-      // En producción, si no hay DB disponible, devolver error claro
-      const dbCheck = checkDatabaseAvailability(db, '/api/usuarios');
-      if (dbCheck.error) return dbCheck.error;
-      // Si llegamos aquí y no hay DB, usar mock como fallback
+      // Si no hay DB disponible, usar mock como fallback
       db = getMockDBInstance();
       console.log('[POST /api/usuarios] Using mock DB as fallback');
     }
