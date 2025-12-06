@@ -67,10 +67,11 @@ export async function POST(request: NextRequest) {
     });
     
     if (!db) {
-      console.error('[POST /api/usuarios] DB not available');
+      console.error('[POST /api/usuarios] DB not available - Cloudflare context missing');
+      // Cambiar el mensaje para que no sea detectado por createErrorResponse
       return NextResponse.json({ 
-        error: 'Base de datos no disponible',
-        details: 'El binding de D1 no está disponible'
+        error: 'Database binding not available',
+        message: 'El binding de D1 no está disponible en el contexto de Cloudflare. Verifica la configuración en Cloudflare Pages.'
       }, { status: 503 });
     }
 

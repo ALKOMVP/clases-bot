@@ -6,9 +6,9 @@
   "/api/reservas/route": "app/api/reservas/route.js",
   "/api/clases/route": "app/api/clases/route.js",
   "/api/usuarios/route": "app/api/usuarios/route.js",
-  "/page": "app/page.js",
-  "/login/page": "app/login/page.js",
   "/clases/page": "app/clases/page.js",
-  "/reservas/page": "app/reservas/page.js",
-  "/usuarios/page": "app/usuarios/page.js"
+  "/login/page": "app/login/page.js",
+  "/usuarios/page": "app/usuarios/page.js",
+  "/page": "app/page.js",
+  "/reservas/page": "app/reservas/page.js"
 }
