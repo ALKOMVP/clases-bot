@@ -9,10 +9,11 @@ La forma más fácil de configurar todo automáticamente es conectar el proyecto
 3. Selecciona **GitHub** y autoriza el acceso
 4. Selecciona el repositorio: `ALKOMVP/clases-bot`
 5. Configura el build:
-   - **Framework preset**: Next.js (o None)
-   - **Build command**: `npm run build:cloudflare`
+   - **Framework preset**: None (no usar Next.js preset)
+   - **Build command**: `npm ci && npm run build:cloudflare`
    - **Build output directory**: `.vercel/output/static`
    - **Root directory**: `/` (dejar vacío)
+   - **Node.js version**: 20.x (o la más reciente disponible)
 6. En **"Environment variables"**: No necesitas agregar nada
 7. Click en **"Save and Deploy"**
 
