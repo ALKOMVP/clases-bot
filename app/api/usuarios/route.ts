@@ -52,26 +52,39 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  // Usar el mismo patrón exacto que /api/test que funciona - Response.json
-  const cloudflareContext = (globalThis as any)[Symbol.for('__cloudflare-context__')];
-  const db = cloudflareContext?.env?.DB;
-  
-  if (!db) {
-    return Response.json({ 
-      error: 'Database binding not available',
-      message: 'El binding de D1 no está disponible'
-    }, { status: 503 });
-  }
-  
   try {
+    // Usar el mismo patrón exacto que GET - acceder a DB de la misma forma
+    let db: any = null;
+    
+    const cloudflareContext = (globalThis as any)[Symbol.for('__cloudflare-context__')];
+    if (cloudflareContext?.env?.DB) {
+      db = cloudflareContext.env.DB;
+    }
+    
+    // Si no hay DB disponible, usar mock como fallback (solo en desarrollo)
+    if (!db) {
+      const isDevelopment = typeof process !== 'undefined' && process.env.NODE_ENV === 'development';
+      if (isDevelopment) {
+        db = getMockDBInstance();
+      } else {
+        // En producción, si no hay DB, devolver error simple
+        return NextResponse.json({ error: 'Database binding not available' }, { status: 503 });
+      }
+    }
+    
+    // Verificar que la DB esté disponible
+    if (!db) {
+      return NextResponse.json({ error: 'Database not available' }, { status: 503 });
+    }
+
     const body = await request.json();
     const { nombre, apellido, email, fecha_alta } = body;
 
     if (!nombre || !apellido || !email) {
-      return Response.json({ error: 'Faltan campos requeridos' }, { status: 400 });
+      return NextResponse.json({ error: 'Faltan campos requeridos' }, { status: 400 });
     }
 
-    // Ejecutar INSERT directamente
+    // Ejecutar INSERT directamente - mismo patrón que GET
     const result = await db.prepare(
       'INSERT INTO usuario (nombre, apellido, email, fecha_alta) VALUES (?, ?, ?, ?)'
     ).bind(nombre, apellido, email, fecha_alta || null).run();
@@ -80,15 +93,15 @@ export async function POST(request: NextRequest) {
       ? (result as any).meta?.last_row_id || (result as any).last_row_id
       : null;
 
-    return Response.json({ success: true, id: lastRowId });
+    return NextResponse.json({ success: true, id: lastRowId });
   } catch (error: any) {
     // Manejar errores específicos
     if (error?.message?.includes('UNIQUE constraint')) {
-      return Response.json({ error: 'El email ya existe' }, { status: 400 });
+      return NextResponse.json({ error: 'El email ya existe' }, { status: 400 });
     }
     
-    // Para cualquier otro error, devolver error genérico
-    return Response.json({ 
+    // Para cualquier otro error, devolver error genérico sin usar createErrorResponse
+    return NextResponse.json({ 
       error: 'Error al crear usuario',
       details: error?.message || String(error)
     }, { status: 500 });
