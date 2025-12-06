@@ -6,6 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "build:cloudflare": "npx @cloudflare/next-on-pages",
+    "deploy:cloudflare": "npm run build:cloudflare && npx wrangler pages deploy .vercel/output/static --project-name=clases-bot",
     "start": "next start",
     "lint": "next lint",
     "db:migrate": "wrangler d1 migrations apply clases-db --local",
