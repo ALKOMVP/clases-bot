@@ -68,23 +68,42 @@ export async function POST(request: NextRequest) {
     if (!db) {
       // Si no hay DB disponible, usar mock como fallback
       db = getMockDBInstance();
-      console.log('[POST /api/usuarios] Using mock DB as fallback');
+      console.log('[POST /api/usuarios] Using mock DB as fallback', { 
+        hasDB: !!db,
+        dbType: typeof db,
+        hasPrepare: typeof db?.prepare === 'function'
+      });
     }
     
     // Verificar que la DB esté disponible (ya sea real o mock)
     if (!db) {
+      console.error('[POST /api/usuarios] DB is null after fallback');
       return NextResponse.json({ error: 'Base de datos no disponible' }, { status: 503 });
     }
 
+    console.log('[POST /api/usuarios] About to parse request body');
     const { nombre, apellido, email, fecha_alta } = await request.json();
+    console.log('[POST /api/usuarios] Request body parsed', { nombre, apellido, email, fecha_alta });
 
     if (!nombre || !apellido || !email) {
       return NextResponse.json({ error: 'Faltan campos requeridos' }, { status: 400 });
     }
 
-    const result = await db.prepare(
-      'INSERT INTO usuario (nombre, apellido, email, fecha_alta) VALUES (?, ?, ?, ?)'
-    ).bind(nombre, apellido, email, fecha_alta || null).run();
+    console.log('[POST /api/usuarios] About to execute INSERT');
+    let result;
+    try {
+      result = await db.prepare(
+        'INSERT INTO usuario (nombre, apellido, email, fecha_alta) VALUES (?, ?, ?, ?)'
+      ).bind(nombre, apellido, email, fecha_alta || null).run();
+      console.log('[POST /api/usuarios] INSERT executed successfully', { result });
+    } catch (insertError: any) {
+      console.error('[POST /api/usuarios] INSERT failed', {
+        error: insertError?.message,
+        name: insertError?.name,
+        stack: insertError?.stack
+      });
+      throw insertError;
+    }
     
     const lastRowId = result && typeof result === 'object' 
       ? (result as any).meta?.last_row_id || (result as any).last_row_id

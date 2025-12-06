@@ -63,10 +63,15 @@ export function createErrorResponse(
 
   // Errores de base de datos - solo si el mensaje es explícitamente sobre DB no disponible
   // No detectar errores genéricos que contengan "DB" o "Database" en el mensaje
-  if (errorMessage === 'Database not available' || 
+  // Solo detectar si el error es explícitamente sobre la DB no disponible
+  const isExplicitDBError = errorMessage === 'Database not available' || 
       errorMessage === 'DB not available' ||
+      errorMessage === 'Base de datos no disponible' ||
       (errorMessage.includes('D1') && errorMessage.includes('not available')) ||
-      (errorMessage.includes('binding') && errorMessage.includes('not found'))) {
+      (errorMessage.includes('binding') && errorMessage.includes('not found')) ||
+      (errorMessage.includes('D1 Database binding') && errorMessage.includes('not found'));
+  
+  if (isExplicitDBError) {
     statusCode = 503; // Service Unavailable
     userMessage = 'Base de datos no disponible';
     technicalDetails = envInfo.isCloudflare 
