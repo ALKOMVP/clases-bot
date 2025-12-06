@@ -52,28 +52,26 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  console.log('[POST /api/usuarios] Starting request');
+  // Usar el mismo patrón exacto que /api/test que funciona
+  const cloudflareContext = (globalThis as any)[Symbol.for('__cloudflare-context__')];
+  const db = cloudflareContext?.env?.DB;
+  
+  console.log('[POST /api/usuarios] Context check', {
+    hasContext: !!cloudflareContext,
+    hasEnv: !!cloudflareContext?.env,
+    hasDB: !!db,
+    envKeys: cloudflareContext?.env ? Object.keys(cloudflareContext.env) : []
+  });
+  
+  if (!db) {
+    console.error('[POST /api/usuarios] DB not available');
+    return NextResponse.json({ 
+      error: 'Database binding not available',
+      message: 'El binding de D1 no está disponible'
+    }, { status: 503 });
+  }
   
   try {
-    // Acceder al contexto de Cloudflare de la misma forma que /api/test
-    const cloudflareContext = (globalThis as any)[Symbol.for('__cloudflare-context__')];
-    const db = cloudflareContext?.env?.DB;
-    
-    console.log('[POST /api/usuarios] Context check', {
-      hasContext: !!cloudflareContext,
-      hasEnv: !!cloudflareContext?.env,
-      hasDB: !!db,
-      envKeys: cloudflareContext?.env ? Object.keys(cloudflareContext.env) : []
-    });
-    
-    if (!db) {
-      console.error('[POST /api/usuarios] DB not available - Cloudflare context missing');
-      // Cambiar el mensaje para que no sea detectado por createErrorResponse
-      return NextResponse.json({ 
-        error: 'Database binding not available',
-        message: 'El binding de D1 no está disponible en el contexto de Cloudflare. Verifica la configuración en Cloudflare Pages.'
-      }, { status: 503 });
-    }
 
     const { nombre, apellido, email, fecha_alta } = await request.json();
 
