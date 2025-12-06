@@ -68,20 +68,30 @@ export async function POST(request: NextRequest) {
       envKeys: cloudflareContext?.env ? Object.keys(cloudflareContext.env) : []
     });
     
-    if (cloudflareContext?.env?.DB) {
-      db = cloudflareContext.env.DB;
-      console.log('[POST /api/usuarios] DB obtained from Cloudflare context (OpenNext)');
-    }
+    // TEMPORAL: Forzar uso de mock DB para verificar que funciona
+    // TODO: Remover esto una vez que funcione
+    db = getMockDBInstance();
+    console.log('[POST /api/usuarios] FORCED: Using mock DB for testing', { 
+      hasMockDB: !!db,
+      mockDBType: typeof db,
+      hasPrepare: typeof db?.prepare === 'function'
+    });
     
-    if (!db) {
-      // Si no hay DB disponible, usar mock como fallback
-      db = getMockDBInstance();
-      console.log('[POST /api/usuarios] Using mock DB as fallback', { 
-        hasMockDB: !!db,
-        mockDBType: typeof db,
-        hasPrepare: typeof db?.prepare === 'function'
-      });
-    }
+    // Código original comentado temporalmente
+    // if (cloudflareContext?.env?.DB) {
+    //   db = cloudflareContext.env.DB;
+    //   console.log('[POST /api/usuarios] DB obtained from Cloudflare context (OpenNext)');
+    // }
+    // 
+    // if (!db) {
+    //   // Si no hay DB disponible, usar mock como fallback
+    //   db = getMockDBInstance();
+    //   console.log('[POST /api/usuarios] Using mock DB as fallback', { 
+    //     hasMockDB: !!db,
+    //     mockDBType: typeof db,
+    //     hasPrepare: typeof db?.prepare === 'function'
+    //   });
+    // }
     
     // Verificar que la DB esté disponible (ya sea real o mock)
     if (!db || typeof db.prepare !== 'function') {
