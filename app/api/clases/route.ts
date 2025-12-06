@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDB } from '@/lib/db';
 
+export const runtime = 'edge';
+
 // Clases semanales fijas
 const CLASES_FIJAS = [
   // Lunes
@@ -22,6 +24,7 @@ const CLASES_FIJAS = [
 
 export async function GET(request: NextRequest) {
   try {
+    // En Cloudflare Pages, el binding D1 está disponible en process.env.DB
     const db = getDB({ DB: (process.env as any).DB });
     if (!db) {
       return NextResponse.json({ error: 'DB not available' }, { status: 500 });
@@ -59,6 +62,7 @@ export async function GET(request: NextRequest) {
 // Endpoint para crear una clase individual o inicializar las clases fijas
 export async function POST(request: NextRequest) {
   try {
+    // En Cloudflare Pages, el binding D1 está disponible en process.env.DB
     const db = getDB({ DB: (process.env as any).DB });
     if (!db) {
       return NextResponse.json({ error: 'DB not available' }, { status: 500 });
@@ -117,6 +121,7 @@ export async function POST(request: NextRequest) {
 // Endpoint para eliminar una clase
 export async function DELETE(request: NextRequest) {
   try {
+    // En Cloudflare Pages, el binding D1 está disponible en process.env.DB
     const db = getDB({ DB: (process.env as any).DB });
     if (!db) {
       return NextResponse.json({ error: 'DB not available' }, { status: 500 });
