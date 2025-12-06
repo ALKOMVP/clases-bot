@@ -52,31 +52,23 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  // Usar el mismo patrón exacto que /api/test que funciona
+  // Usar el mismo patrón exacto que /api/test que funciona - Response.json
   const cloudflareContext = (globalThis as any)[Symbol.for('__cloudflare-context__')];
   const db = cloudflareContext?.env?.DB;
   
-  console.log('[POST /api/usuarios] Context check', {
-    hasContext: !!cloudflareContext,
-    hasEnv: !!cloudflareContext?.env,
-    hasDB: !!db,
-    envKeys: cloudflareContext?.env ? Object.keys(cloudflareContext.env) : []
-  });
-  
   if (!db) {
-    console.error('[POST /api/usuarios] DB not available');
-    return NextResponse.json({ 
+    return Response.json({ 
       error: 'Database binding not available',
       message: 'El binding de D1 no está disponible'
     }, { status: 503 });
   }
   
   try {
-
-    const { nombre, apellido, email, fecha_alta } = await request.json();
+    const body = await request.json();
+    const { nombre, apellido, email, fecha_alta } = body;
 
     if (!nombre || !apellido || !email) {
-      return NextResponse.json({ error: 'Faltan campos requeridos' }, { status: 400 });
+      return Response.json({ error: 'Faltan campos requeridos' }, { status: 400 });
     }
 
     // Ejecutar INSERT directamente
@@ -88,26 +80,15 @@ export async function POST(request: NextRequest) {
       ? (result as any).meta?.last_row_id || (result as any).last_row_id
       : null;
 
-    console.log('[POST /api/usuarios] Success', { id: lastRowId });
-    return NextResponse.json({ success: true, id: lastRowId });
+    return Response.json({ success: true, id: lastRowId });
   } catch (error: any) {
-    console.error('[POST /api/usuarios] Error caught:', {
-      message: error?.message,
-      name: error?.name,
-      stack: error?.stack,
-      error: String(error),
-      errorType: typeof error,
-      errorKeys: error ? Object.keys(error) : []
-    });
-    
     // Manejar errores específicos
     if (error?.message?.includes('UNIQUE constraint')) {
-      return NextResponse.json({ error: 'El email ya existe' }, { status: 400 });
+      return Response.json({ error: 'El email ya existe' }, { status: 400 });
     }
     
-    // Para cualquier otro error, devolver error genérico con detalles
-    // NO usar createErrorResponse para evitar problemas de detección de entorno
-    return NextResponse.json({ 
+    // Para cualquier otro error, devolver error genérico
+    return Response.json({ 
       error: 'Error al crear usuario',
       details: error?.message || String(error)
     }, { status: 500 });
