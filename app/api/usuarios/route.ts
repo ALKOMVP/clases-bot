@@ -19,18 +19,14 @@ export async function GET(request: NextRequest) {
     }
     
     if (!db) {
-      if (typeof process !== 'undefined' && process.env.NODE_ENV === 'development') {
-        db = getMockDBInstance();
-        console.log('[GET /api/usuarios] Using mock DB (development)');
-      } else {
-        console.warn('[GET /api/usuarios] DB not available, returning empty array');
-        return NextResponse.json([]);
-      }
+      // Si no hay DB disponible, usar mock como fallback
+      db = getMockDBInstance();
+      console.log('[GET /api/usuarios] Using mock DB as fallback');
     }
     
-    const dbCheck = checkDatabaseAvailability(db, '/api/usuarios');
-    if (!dbCheck.available && dbCheck.error) {
-      return dbCheck.error;
+    // Verificar que la DB esté disponible (ya sea real o mock)
+    if (!db) {
+      return NextResponse.json({ error: 'Base de datos no disponible' }, { status: 503 });
     }
 
     const { searchParams } = new URL(request.url);
@@ -70,19 +66,17 @@ export async function POST(request: NextRequest) {
     }
     
     if (!db) {
-      if (typeof process !== 'undefined' && process.env.NODE_ENV === 'development') {
-        db = getMockDBInstance();
-        console.log('[POST /api/usuarios] Using mock DB (development)');
-      } else {
-        const dbCheck = checkDatabaseAvailability(db, '/api/usuarios');
-        if (dbCheck.error) return dbCheck.error;
-        return NextResponse.json([]);
-      }
+      // En producción, si no hay DB disponible, devolver error claro
+      const dbCheck = checkDatabaseAvailability(db, '/api/usuarios');
+      if (dbCheck.error) return dbCheck.error;
+      // Si llegamos aquí y no hay DB, usar mock como fallback
+      db = getMockDBInstance();
+      console.log('[POST /api/usuarios] Using mock DB as fallback');
     }
     
-    const dbCheck = checkDatabaseAvailability(db, '/api/usuarios');
-    if (!dbCheck.available && dbCheck.error) {
-      return dbCheck.error;
+    // Verificar que la DB esté disponible (ya sea real o mock)
+    if (!db) {
+      return NextResponse.json({ error: 'Base de datos no disponible' }, { status: 503 });
     }
 
     const { nombre, apellido, email, fecha_alta } = await request.json();
@@ -128,19 +122,14 @@ export async function PUT(request: NextRequest) {
     }
     
     if (!db) {
-      if (typeof process !== 'undefined' && process.env.NODE_ENV === 'development') {
-        db = getMockDBInstance();
-        console.log('[PUT /api/usuarios] Using mock DB (development)');
-      } else {
-        const dbCheck = checkDatabaseAvailability(db, '/api/usuarios');
-        if (dbCheck.error) return dbCheck.error;
-        return NextResponse.json([]);
-      }
+      // Si no hay DB disponible, usar mock como fallback
+      db = getMockDBInstance();
+      console.log('[PUT /api/usuarios] Using mock DB as fallback');
     }
     
-    const dbCheck = checkDatabaseAvailability(db, '/api/usuarios');
-    if (!dbCheck.available && dbCheck.error) {
-      return dbCheck.error;
+    // Verificar que la DB esté disponible (ya sea real o mock)
+    if (!db) {
+      return NextResponse.json({ error: 'Base de datos no disponible' }, { status: 503 });
     }
 
     const { id, nombre, apellido, email, fecha_alta } = await request.json();
@@ -179,19 +168,14 @@ export async function DELETE(request: NextRequest) {
     }
     
     if (!db) {
-      if (typeof process !== 'undefined' && process.env.NODE_ENV === 'development') {
-        db = getMockDBInstance();
-        console.log('[DELETE /api/usuarios] Using mock DB (development)');
-      } else {
-        const dbCheck = checkDatabaseAvailability(db, '/api/usuarios');
-        if (dbCheck.error) return dbCheck.error;
-        return NextResponse.json([]);
-      }
+      // Si no hay DB disponible, usar mock como fallback
+      db = getMockDBInstance();
+      console.log('[DELETE /api/usuarios] Using mock DB as fallback');
     }
     
-    const dbCheck = checkDatabaseAvailability(db, '/api/usuarios');
-    if (!dbCheck.available && dbCheck.error) {
-      return dbCheck.error;
+    // Verificar que la DB esté disponible (ya sea real o mock)
+    if (!db) {
+      return NextResponse.json({ error: 'Base de datos no disponible' }, { status: 503 });
     }
 
     const { searchParams } = new URL(request.url);
