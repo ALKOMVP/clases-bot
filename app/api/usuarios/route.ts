@@ -62,48 +62,48 @@ export async function POST(request: NextRequest) {
     const cloudflareContext = (globalThis as any)[Symbol.for('__cloudflare-context__')];
     if (cloudflareContext?.env?.DB) {
       db = cloudflareContext.env.DB;
-      console.log('[POST /api/usuarios] DB obtained from Cloudflare context (OpenNext)');
-    }
-    
-    if (!db) {
-      // Si no hay DB disponible, usar mock como fallback
-      db = getMockDBInstance();
-      console.log('[POST /api/usuarios] Using mock DB as fallback', { 
+      console.log('[POST /api/usuarios] DB obtained from Cloudflare context (OpenNext)', {
         hasDB: !!db,
         dbType: typeof db,
         hasPrepare: typeof db?.prepare === 'function'
       });
     }
     
-    // Verificar que la DB esté disponible (ya sea real o mock)
+    // Solo usar mock DB si NO hay DB real disponible Y estamos en desarrollo
     if (!db) {
-      console.error('[POST /api/usuarios] DB is null after fallback');
+      const isDevelopment = typeof process !== 'undefined' && process.env.NODE_ENV === 'development';
+      if (isDevelopment) {
+        db = getMockDBInstance();
+        console.log('[POST /api/usuarios] Using mock DB (development only)');
+      } else {
+        // En producción, si no hay DB, devolver error
+        console.error('[POST /api/usuarios] DB not available in production');
+        return NextResponse.json({ 
+          error: 'Base de datos no disponible',
+          details: 'El binding de D1 no está configurado correctamente'
+        }, { status: 503 });
+      }
+    }
+    
+    // Verificar que la DB esté disponible
+    if (!db || typeof db.prepare !== 'function') {
+      console.error('[POST /api/usuarios] DB is invalid', { 
+        hasDB: !!db,
+        hasPrepare: typeof db?.prepare === 'function'
+      });
       return NextResponse.json({ error: 'Base de datos no disponible' }, { status: 503 });
     }
 
-    console.log('[POST /api/usuarios] About to parse request body');
     const { nombre, apellido, email, fecha_alta } = await request.json();
-    console.log('[POST /api/usuarios] Request body parsed', { nombre, apellido, email, fecha_alta });
 
     if (!nombre || !apellido || !email) {
       return NextResponse.json({ error: 'Faltan campos requeridos' }, { status: 400 });
     }
 
-    console.log('[POST /api/usuarios] About to execute INSERT');
-    let result;
-    try {
-      result = await db.prepare(
-        'INSERT INTO usuario (nombre, apellido, email, fecha_alta) VALUES (?, ?, ?, ?)'
-      ).bind(nombre, apellido, email, fecha_alta || null).run();
-      console.log('[POST /api/usuarios] INSERT executed successfully', { result });
-    } catch (insertError: any) {
-      console.error('[POST /api/usuarios] INSERT failed', {
-        error: insertError?.message,
-        name: insertError?.name,
-        stack: insertError?.stack
-      });
-      throw insertError;
-    }
+    // Ejecutar INSERT
+    const result = await db.prepare(
+      'INSERT INTO usuario (nombre, apellido, email, fecha_alta) VALUES (?, ?, ?, ?)'
+    ).bind(nombre, apellido, email, fecha_alta || null).run();
     
     const lastRowId = result && typeof result === 'object' 
       ? (result as any).meta?.last_row_id || (result as any).last_row_id

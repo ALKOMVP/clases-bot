@@ -85,10 +85,19 @@ export async function POST(request: NextRequest) {
       console.log('[POST /api/clases] DB obtained from Cloudflare context (OpenNext)');
     }
     
+    // Solo usar mock DB si NO hay DB real disponible Y estamos en desarrollo
     if (!db) {
-      // Si no hay DB disponible, usar mock como fallback
-      db = getMockDBInstance();
-      console.log('[POST /api/clases] Using mock DB as fallback');
+      const isDevelopment = typeof process !== 'undefined' && process.env.NODE_ENV === 'development';
+      if (isDevelopment) {
+        db = getMockDBInstance();
+        console.log('[POST /api/clases] Using mock DB (development only)');
+      } else {
+        console.error('[POST /api/clases] DB not available in production');
+        return NextResponse.json({ 
+          error: 'Base de datos no disponible',
+          details: 'El binding de D1 no está configurado correctamente'
+        }, { status: 503 });
+      }
     }
     
     // Verificar que la DB esté disponible (ya sea real o mock)

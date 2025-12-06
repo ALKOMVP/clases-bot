@@ -51,6 +51,8 @@ export function createErrorResponse(
     operation: context?.operation || 'unknown',
     errorName,
     errorMessage,
+    errorMessageLength: errorMessage?.length,
+    errorMessageExact: JSON.stringify(errorMessage),
     stack: error?.stack,
     fullError: String(error),
     timestamp: new Date().toISOString()
