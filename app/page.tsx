@@ -10,9 +10,30 @@ interface Stats {
   reservas: number;
 }
 
+interface Usuario {
+  id: number;
+  nombre: string;
+  apellido: string;
+  telefono: string;
+  activo: boolean;
+}
+
+interface Reserva {
+  id: number;
+  usuario_id: number;
+  clase_id: number;
+  nombre: string;
+  apellido: string;
+  dia: string;
+  hora: string;
+  clase_nombre?: string;
+}
+
 export default function HomePage() {
   const [stats, setStats] = useState<Stats>({ usuarios: 0, clases: 0, reservas: 0 });
   const [loading, setLoading] = useState(true);
+  const [alumnosDesactivados, setAlumnosDesactivados] = useState<Usuario[]>([]);
+  const [reservasRecientes, setReservasRecientes] = useState<Reserva[]>([]);
 
   useEffect(() => {
     const fetchStats = async () => {
@@ -26,6 +47,22 @@ export default function HomePage() {
         const usuarios = await usuariosRes.json();
         const clases = await clasesRes.json();
         const reservas = await reservasRes.json();
+
+        // Filtrar y obtener primeros 5 alumnos desactivados
+        // El campo activo puede venir como boolean false o como número 0
+        const desactivados = Array.isArray(usuarios) 
+          ? usuarios.filter((u: any) => {
+              const activo = u.activo;
+              return activo === false || activo === 0 || activo === '0' || activo === null || activo === undefined;
+            }).slice(0, 5)
+          : [];
+        setAlumnosDesactivados(desactivados);
+
+        // Obtener primeras 5 reservas aleatorias/recientes
+        const reservasAleatorias = Array.isArray(reservas) 
+          ? reservas.slice(0, 5)
+          : [];
+        setReservasRecientes(reservasAleatorias);
 
         setStats({
           usuarios: Array.isArray(usuarios) ? usuarios.length : 0,
@@ -94,6 +131,79 @@ export default function HomePage() {
               >
                 Ver calendario →
               </Link>
+            </div>
+          </div>
+        )}
+
+        {/* Alumnos Desactivados */}
+        {alumnosDesactivados.length > 0 && (
+          <div className="bg-white rounded-lg shadow p-4 sm:p-6 mb-6 sm:mb-8">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl sm:text-2xl font-bold text-gray-900">
+                Alumnos Desactivados
+              </h2>
+              <Link
+                href="/usuarios?filter=desactivados"
+                className="text-purple-600 hover:text-purple-700 text-sm sm:text-base"
+              >
+                Ver todos →
+              </Link>
+            </div>
+            <div className="space-y-3">
+              {alumnosDesactivados.map((alumno) => (
+                <div
+                  key={alumno.id}
+                  className="flex items-center justify-between p-3 bg-red-50 border border-red-200 rounded-lg"
+                >
+                  <div>
+                    <p className="font-semibold text-gray-900">
+                      {alumno.nombre} {alumno.apellido}
+                    </p>
+                    <p className="text-sm text-gray-600">{alumno.telefono}</p>
+                  </div>
+                  <span className="px-2 py-1 bg-red-600 text-white text-xs rounded-full">
+                    Desactivado
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Reservas Recientes */}
+        {reservasRecientes.length > 0 && (
+          <div className="bg-white rounded-lg shadow p-4 sm:p-6 mb-6 sm:mb-8">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl sm:text-2xl font-bold text-gray-900">
+                Inscripciones Recientes
+              </h2>
+              <Link
+                href="/calendario"
+                className="text-purple-600 hover:text-purple-700 text-sm sm:text-base"
+              >
+                Ver todas →
+              </Link>
+            </div>
+            <div className="space-y-3">
+              {reservasRecientes.map((reserva) => (
+                <div
+                  key={reserva.id}
+                  className="flex items-center justify-between p-3 bg-green-50 border border-green-200 rounded-lg"
+                >
+                  <div>
+                    <p className="font-semibold text-gray-900">
+                      {reserva.nombre} {reserva.apellido}
+                    </p>
+                    <p className="text-sm text-gray-600">
+                      {reserva.dia} {reserva.hora}
+                      {reserva.clase_nombre && ` - ${reserva.clase_nombre}`}
+                    </p>
+                  </div>
+                  <span className="px-2 py-1 bg-green-600 text-white text-xs rounded-full">
+                    Activa
+                  </span>
+                </div>
+              ))}
             </div>
           </div>
         )}

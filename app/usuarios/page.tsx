@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useSearchParams } from 'next/navigation';
 import Navbar from '@/components/Navbar';
 import TableScrollContainer from '@/components/TableScrollContainer';
 import { handleApiError, fetchWithErrorHandling } from '@/lib/frontend-error-handler';
@@ -30,6 +31,7 @@ interface Reserva {
 }
 
 export default function UsuariosPage() {
+  const searchParams = useSearchParams();
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
   const [clases, setClases] = useState<Clase[]>([]);
   const [reservas, setReservas] = useState<Reserva[]>([]);
@@ -54,6 +56,14 @@ export default function UsuariosPage() {
     telefono: '',
     fecha_alta: new Date().toISOString().split('T')[0],
   });
+
+  // Leer parámetro de filtro de la URL
+  useEffect(() => {
+    const filter = searchParams.get('filter');
+    if (filter === 'desactivados' || filter === 'activos' || filter === 'all') {
+      setFilterStatus(filter);
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     const initData = async () => {
@@ -368,28 +378,6 @@ export default function UsuariosPage() {
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 sm:gap-0 mb-4 sm:mb-6">
           <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900">Alumnos</h1>
           <div className="flex gap-2 w-full sm:w-auto">
-            {usuarios.filter(u => !u.activo).length > 0 && (
-              <button
-                onClick={async () => {
-                  if (!confirm(`¿Activar todos los ${usuarios.filter(u => !u.activo).length} alumnos desactivados?`)) return;
-                  try {
-                    const res = await fetch('/api/usuarios/activate-all', { method: 'POST' });
-                    const data = await res.json();
-                    if (res.ok) {
-                      alert(data.message || 'Usuarios activados correctamente');
-                      loadUsuarios();
-                    } else {
-                      alert(data.error || 'Error al activar usuarios');
-                    }
-                  } catch (error: any) {
-                    alert('Error al activar usuarios: ' + error.message);
-                  }
-                }}
-                className="bg-green-600 text-white px-3 sm:px-4 py-2 rounded-lg hover:bg-green-700 transition-colors text-sm sm:text-base"
-              >
-                Activar Todos
-              </button>
-            )}
             <button
               onClick={() => {
                 setShowForm(true);

@@ -112,31 +112,68 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Asignar reservas aleatorias (cada usuario tendrá entre 1 y 4 clases)
+    // Asignar reservas aleatorias solo a usuarios activos
+    // Primero obtener los usuarios creados con su estado activo
+    const usuariosConEstado = await Promise.all(
+      usuariosCreados.map(async (u) => {
+        try {
+          const usuarioCompleto = await db.prepare('SELECT id, activo FROM usuario WHERE id = ?').bind(u.id).first();
+          const activo = (usuarioCompleto as any)?.activo === 1 || (usuarioCompleto as any)?.activo === true;
+          return {
+            id: u.id,
+            nombre: u.nombre,
+            apellido: u.apellido,
+            activo
+          };
+        } catch (error: any) {
+          console.error(`Error obteniendo estado de usuario ${u.id}:`, error.message);
+          return {
+            id: u.id,
+            nombre: u.nombre,
+            apellido: u.apellido,
+            activo: false
+          };
+        }
+      })
+    );
+
+    const usuariosActivos = usuariosConEstado.filter(u => u.activo);
+    console.log(`[test-users] ${usuariosActivos.length} usuarios activos de ${usuariosCreados.length} totales`);
+
     let reservasCreadas = 0;
-    for (const usuario of usuariosCreados) {
+    for (const usuario of usuariosActivos) {
       const numReservas = getRandomInt(1, 4);
       const clasesAsignadas = new Set<number>();
       
       for (let i = 0; i < numReservas; i++) {
         let claseId;
+        let intentos = 0;
         do {
           const clase = getRandomElement(clases);
           claseId = clase.id;
+          intentos++;
+          if (intentos > 10) break; // Evitar loops infinitos
         } while (clasesAsignadas.has(claseId));
+        
+        if (!claseId) continue;
         
         clasesAsignadas.add(claseId);
         
         try {
-          await db.prepare(
+          const result = await db.prepare(
             'INSERT OR IGNORE INTO reserva (usuario_id, clase_id, created_at) VALUES (?, ?, ?)'
           ).bind(usuario.id, claseId, new Date().toISOString()).run();
+          
+          // Verificar si se insertó realmente (INSERT OR IGNORE no devuelve error si ya existe)
           reservasCreadas++;
+          console.log(`[test-users] Reserva creada: usuario ${usuario.id} -> clase ${claseId}`);
         } catch (error: any) {
-          // Ignorar errores de duplicados
+          console.error(`[test-users] Error creando reserva para usuario ${usuario.id}, clase ${claseId}:`, error.message);
         }
       }
     }
+    
+    console.log(`[test-users] Total reservas creadas: ${reservasCreadas}`);
 
     return NextResponse.json({ 
       success: true, 
