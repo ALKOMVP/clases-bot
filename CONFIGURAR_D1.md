@@ -101,3 +101,8 @@ En la misma página (Settings > Functions):
 - Documentación de D1: https://developers.cloudflare.com/d1/
 - Documentación de Pages: https://developers.cloudflare.com/pages/
 
+
+
+
+
+

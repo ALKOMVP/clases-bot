@@ -119,3 +119,8 @@ Una vez desplegado, accede a tu aplicación con:
 - Ejecuta `npm install` nuevamente
 - Verifica que todas las dependencias estén instaladas
 
+
+
+
+
+

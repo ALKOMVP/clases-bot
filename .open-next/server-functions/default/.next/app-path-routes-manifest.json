@@ -1,15 +1,21 @@
 {
   "/_not-found/page": "/_not-found",
+  "/api/test-users/route": "/api/test-users",
+  "/api/reservas/generate-random/route": "/api/reservas/generate-random",
+  "/api/reservas/cleanup-desactivados/route": "/api/reservas/cleanup-desactivados",
+  "/api/usuarios/activate-all/route": "/api/usuarios/activate-all",
+  "/api/auth/login/route": "/api/auth/login",
+  "/api/clases/route": "/api/clases",
+  "/api/test/route": "/api/test",
   "/api/test-post/route": "/api/test-post",
   "/api/auth/logout/route": "/api/auth/logout",
-  "/api/auth/login/route": "/api/auth/login",
-  "/api/test/route": "/api/test",
-  "/api/clases/route": "/api/clases",
-  "/api/usuarios/route": "/api/usuarios",
+  "/api/export/route": "/api/export",
   "/api/reservas/route": "/api/reservas",
-  "/clases/page": "/clases",
+  "/api/usuarios/route": "/api/usuarios",
+  "/calendario/page": "/calendario",
   "/login/page": "/login",
+  "/clases/page": "/clases",
   "/page": "/",
-  "/usuarios/page": "/usuarios",
-  "/reservas/page": "/reservas"
+  "/reservas/page": "/reservas",
+  "/usuarios/page": "/usuarios"
 }

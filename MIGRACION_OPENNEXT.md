@@ -35,3 +35,8 @@ Estamos migrando de `@cloudflare/next-on-pages` a `@opennextjs/cloudflare`.
 - [OpenNext Cloudflare Documentation](https://opennext.js.org/cloudflare)
 - [OpenNext GitHub](https://github.com/opennextjs/opennextjs-aws)
 
+
+
+
+
+

@@ -124,3 +124,8 @@ Si no ves logs en el dashboard:
 - Documentación de Logs: https://developers.cloudflare.com/pages/platform/functions/logs/
 - Wrangler CLI Docs: https://developers.cloudflare.com/workers/wrangler/
 
+
+
+
+
+

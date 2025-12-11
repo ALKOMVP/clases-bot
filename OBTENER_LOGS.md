@@ -102,3 +102,8 @@ Por favor, envía los logs en este formato:
 - Tu proyecto: https://dash.cloudflare.com/pages (busca clases-bot)
 - Documentación de logs: https://developers.cloudflare.com/pages/platform/functions/logs/
 
+
+
+
+
+

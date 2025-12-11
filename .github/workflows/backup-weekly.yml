@@ -1,0 +1,80 @@
+name: Backup Semanal de Base de Datos
+
+on:
+  schedule:
+    # Ejecutar todos los domingos a las 2:00 AM UTC (11:00 PM del sábado en Buenos Aires)
+    - cron: '0 2 * * 0'
+  workflow_dispatch: # Permite ejecución manual
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    name: Backup y Envío por Email
+    
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v3
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+
+      - name: Instalar Wrangler
+        run: npm install -g wrangler
+
+      - name: Instalar dependencias
+        run: npm install
+
+      - name: Autenticar Wrangler
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          echo "$CLOUDFLARE_API_TOKEN" | wrangler login
+
+      - name: Crear directorio de backups
+        run: mkdir -p backups
+
+      - name: Exportar base de datos
+        run: |
+          TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
+          BACKUP_FILE="backups/clases-db-backup-${TIMESTAMP}.sql"
+          wrangler d1 export clases-db --remote --output "$BACKUP_FILE"
+          echo "BACKUP_FILE=$BACKUP_FILE" >> $GITHUB_ENV
+          echo "✅ Backup creado: $BACKUP_FILE"
+
+      - name: Enviar backup por email (SendGrid)
+        env:
+          SENDGRID_API_KEY: ${{ secrets.SENDGRID_API_KEY }}
+          EMAIL_FROM: ${{ secrets.EMAIL_FROM || 'solverive@gmail.com' }}
+          EMAIL_TO: solverive@gmail.com
+          BACKUP_FILE: ${{ env.BACKUP_FILE }}
+        run: |
+          if [ -n "$SENDGRID_API_KEY" ]; then
+            echo "📬 Usando SendGrid para enviar email..."
+            node scripts/send-backup-email-sendgrid.js
+          else
+            echo "⚠️  SENDGRID_API_KEY no configurado, intentando con Gmail..."
+            npm install nodemailer
+            export EMAIL_PASSWORD="${{ secrets.EMAIL_PASSWORD }}"
+            if [ -n "$EMAIL_PASSWORD" ]; then
+              node scripts/send-backup-email.js
+            else
+              echo "❌ No hay credenciales de email configuradas"
+              exit 1
+            fi
+          fi
+
+      - name: Subir backup como artifact (opcional)
+        uses: actions/upload-artifact@v3
+        with:
+          name: db-backup-weekly
+          path: backups/*.sql
+          retention-days: 7
+
+      - name: Mostrar resumen
+        run: |
+          echo "✅ Backup semanal completado exitosamente"
+          echo "📧 Email enviado a solverive@gmail.com"
+          echo "📁 Archivo: ${{ env.BACKUP_FILE }}"
+

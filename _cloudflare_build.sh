@@ -10,3 +10,8 @@ npm run build:cloudflare
 
 echo "Build completado exitosamente"
 
+
+
+
+
+
