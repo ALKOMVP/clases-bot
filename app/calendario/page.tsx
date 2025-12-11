@@ -243,13 +243,6 @@ export default function CalendarioPage() {
               Próximos 30 días - Haz click en una clase para ver los alumnos inscritos
             </p>
           </div>
-          <button
-            onClick={() => handleGenerateRandomReservas()}
-            disabled={generatingReservas}
-            className="bg-green-600 text-white px-3 sm:px-4 py-2 rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 text-sm sm:text-base w-full sm:w-auto"
-          >
-            {generatingReservas ? 'Generando...' : 'Generar Reservas Aleatorias'}
-          </button>
         </div>
 
         {calendarData.length === 0 ? (
