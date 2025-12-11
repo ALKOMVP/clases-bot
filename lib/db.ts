@@ -3,8 +3,9 @@ export interface Usuario {
   id: number;
   nombre: string;
   apellido: string;
-  email: string;
+  telefono: string;
   fecha_alta: string;
+  activo: boolean;
 }
 
 export interface Clase {

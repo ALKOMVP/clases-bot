@@ -40,8 +40,14 @@ export async function GET(request: NextRequest) {
     const result = await db.prepare('SELECT * FROM usuario ORDER BY apellido, nombre').all();
     const usuarios = (result?.results || []) as any[];
     
-    console.log('[GET /api/usuarios] Success', { count: usuarios.length });
-    return NextResponse.json(Array.isArray(usuarios) ? usuarios : []);
+    // Convertir activo de INTEGER a boolean
+    const usuariosNormalizados = usuarios.map((u: any) => ({
+      ...u,
+      activo: u.activo === 1 || u.activo === true
+    }));
+    
+    console.log('[GET /api/usuarios] Success', { count: usuariosNormalizados.length });
+    return NextResponse.json(Array.isArray(usuariosNormalizados) ? usuariosNormalizados : []);
   } catch (error: any) {
     return createErrorResponse(
       error,
@@ -78,16 +84,20 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { nombre, apellido, email, telefono, fecha_alta } = body;
+    const { nombre, apellido, telefono, fecha_alta, activo } = body;
 
-    if (!nombre || !apellido || !email || !telefono) {
+    if (!nombre || !apellido || !telefono) {
       return NextResponse.json({ error: 'Faltan campos requeridos' }, { status: 400 });
     }
 
     // Ejecutar INSERT directamente - mismo patrón que GET
+    const activoValue = activo !== undefined ? (activo ? 1 : 0) : 1;
+    
+    console.log('[POST /api/usuarios] Datos a insertar:', { nombre, apellido, telefono, fecha_alta, activo: activoValue });
+    
     const result = await db.prepare(
-      'INSERT INTO usuario (nombre, apellido, email, telefono, fecha_alta) VALUES (?, ?, ?, ?, ?)'
-    ).bind(nombre, apellido, email, telefono, fecha_alta || null).run();
+      'INSERT INTO usuario (nombre, apellido, telefono, fecha_alta, activo) VALUES (?, ?, ?, ?, ?)'
+    ).bind(nombre, apellido, telefono, fecha_alta || null, activoValue).run();
     
     const lastRowId = result && typeof result === 'object' 
       ? (result as any).meta?.last_row_id || (result as any).last_row_id
@@ -96,14 +106,13 @@ export async function POST(request: NextRequest) {
     console.log('[POST /api/usuarios] Success', { id: lastRowId });
     return NextResponse.json({ success: true, id: lastRowId });
   } catch (error: any) {
-    // NO usar createErrorResponse - devolver error directo
-    if (error?.message?.includes('UNIQUE constraint')) {
-      return NextResponse.json({ error: 'El email ya existe' }, { status: 400 });
-    }
+    console.error('[POST /api/usuarios] Error:', error);
+    const errorMessage = error?.message || String(error);
+    
     
     return NextResponse.json({ 
-      error: 'Error al crear usuario',
-      details: error?.message || String(error)
+      error: `Error al crear usuario: ${errorMessage}`,
+      details: errorMessage
     }, { status: 500 });
   }
 }
@@ -133,15 +142,19 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'Base de datos no disponible' }, { status: 503 });
     }
 
-    const { id, nombre, apellido, email, telefono, fecha_alta } = await request.json();
+    const { id, nombre, apellido, telefono, fecha_alta, activo } = await request.json();
 
-    if (!id || !nombre || !apellido || !email || !telefono) {
+    if (!id || !nombre || !apellido || !telefono) {
       return NextResponse.json({ error: 'Faltan campos requeridos' }, { status: 400 });
     }
 
+    const activoValue = activo !== undefined ? (activo ? 1 : 0) : 1;
+    
+    console.log('[PUT /api/usuarios] Datos a actualizar:', { id, nombre, apellido, telefono, fecha_alta, activo: activoValue });
+    
     await db.prepare(
-      'UPDATE usuario SET nombre = ?, apellido = ?, email = ?, telefono = ?, fecha_alta = ? WHERE id = ?'
-    ).bind(nombre, apellido, email, telefono, fecha_alta, id).run();
+      'UPDATE usuario SET nombre = ?, apellido = ?, telefono = ?, fecha_alta = ?, activo = ? WHERE id = ?'
+    ).bind(nombre, apellido, telefono, fecha_alta, activoValue, id).run();
 
     console.log('[PUT /api/usuarios] Success', { id });
     return NextResponse.json({ success: true });

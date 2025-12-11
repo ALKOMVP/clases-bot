@@ -7,27 +7,22 @@ function normalizeUsuario(u: any) {
     return null;
   }
   
-  const emailStr = String(u.email || '').trim();
   const apellidoStr = String(u.apellido || '').trim();
   const nombreStr = String(u.nombre || '').trim();
   
   // Validar que no sean datos corruptos
-  const emailEsFecha = /^\d{4}-\d{2}-\d{2}$/.test(emailStr);
-  const apellidoEsEmail = apellidoStr.includes('@');
-  const nombreEsEmail = nombreStr.includes('@');
-  const emailEsValido = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailStr);
-  
-  if (emailEsFecha || apellidoEsEmail || nombreEsEmail || !emailEsValido || !nombreStr || !apellidoStr || !emailStr) {
+  if (!nombreStr || !apellidoStr) {
     return null;
   }
   
-  // Reconstruir en orden correcto, SOLO con los campos correctos (sin dni)
+  // Reconstruir en orden correcto, SOLO con los campos correctos (sin dni, sin email)
   const usuarioNormalizado: any = {};
   usuarioNormalizado.id = Number(u.id);
   usuarioNormalizado.nombre = nombreStr;
   usuarioNormalizado.apellido = apellidoStr;
-  usuarioNormalizado.email = emailStr.toLowerCase();
+  usuarioNormalizado.telefono = u.telefono ? String(u.telefono).trim() : '';
   usuarioNormalizado.fecha_alta = u.fecha_alta ? String(u.fecha_alta).trim() : new Date().toISOString().split('T')[0];
+  usuarioNormalizado.activo = u.activo !== undefined ? (u.activo === 1 || u.activo === true) : true;
   
   return usuarioNormalizado;
 }
@@ -70,17 +65,8 @@ function getMockData() {
     .map((u: any) => normalizeUsuario(u))
     .filter((u: any) => u !== null);
   
-  // Eliminar duplicados por email (mantener el primero)
-  const emailsVistos = new Set<string>();
-  mockData.usuarios = usuariosNormalizados.filter((u: any) => {
-    if (!u || !u.email) return false;
-    const emailKey = String(u.email).toLowerCase().trim();
-    if (emailsVistos.has(emailKey)) {
-      return false; // Duplicado, eliminar
-    }
-    emailsVistos.add(emailKey);
-    return true;
-  });
+  // No hay duplicados por email ya que eliminamos ese campo
+  mockData.usuarios = usuariosNormalizados.filter((u: any) => u !== null);
   
   return mockData;
 }
@@ -99,13 +85,61 @@ class MockDB {
         return {
           first: async () => {
             const mockData = getMockData();
+            
+            // Manejar COUNT(*) queries
+            if (query.includes('SELECT COUNT(*)')) {
+              if (query.includes('FROM reserva') && query.includes('WHERE clase_id')) {
+                // COUNT de reservas por clase_id
+                const claseId = params && params.length > 0 ? parseInt(params[0]) : null;
+                if (claseId !== null) {
+                  const count = mockData.reservas.filter((r: any) => r.clase_id === claseId).length;
+                  return { count };
+                }
+              }
+              if (query.includes('FROM clase')) {
+                // COUNT de clases
+                return { count: mockData.clases.length };
+              }
+              if (query.includes('FROM usuario')) {
+                // COUNT de usuarios
+                return { count: mockData.usuarios.length };
+              }
+              if (query.includes('FROM reserva')) {
+                // COUNT de reservas
+                return { count: mockData.reservas.length };
+              }
+            }
+            
             if (query.includes('SELECT') && query.includes('WHERE')) {
-              if (query.includes('usuario') && query.includes('id')) {
+              if (query.includes('FROM usuario') && query.includes('id')) {
                 const usuario = mockData.usuarios.find((u: any) => u.id === parseInt(params[0]));
                 if (!usuario) return null;
                 // Usar la función de normalización (definida en getMockData)
                 const normalized = normalizeUsuario(usuario);
                 return normalized;
+              }
+              // Manejar SELECT de reserva WHERE usuario_id y clase_id
+              // Hacer la condición más específica para evitar falsos positivos
+              // Verificar que sea exactamente "SELECT * FROM reserva WHERE usuario_id = ? AND clase_id = ?"
+              if (query.includes('SELECT') &&
+                  query.includes('FROM reserva') && 
+                  query.includes('WHERE usuario_id') && 
+                  query.includes('clase_id') &&
+                  query.includes('AND') &&
+                  params && params.length >= 2) {
+                const usuarioId = Number(params[0]);
+                const claseId = Number(params[1]);
+                
+                // Buscar la reserva comparando ambos IDs como números
+                const reserva = mockData.reservas.find(
+                  (r: any) => {
+                    const rUsuarioId = Number(r.usuario_id);
+                    const rClaseId = Number(r.clase_id);
+                    return rUsuarioId === usuarioId && rClaseId === claseId;
+                  }
+                );
+                // Retornar null explícitamente si no se encuentra (no undefined)
+                return reserva || null;
               }
             }
             return null;
@@ -172,7 +206,6 @@ class MockDB {
                       ...reserva,
                       nombre: usuario.nombre,
                       apellido: usuario.apellido,
-                      email: usuario.email,
                       dia: clase.dia,
                       hora: clase.hora,
                       clase_nombre: clase.nombre
@@ -216,152 +249,56 @@ class MockDB {
             const mockData = getMockData();
             try {
               if (query.includes('INSERT INTO usuario')) {
-              // El orden de los parámetros es: nombre, apellido, email, telefono, fecha_alta
-              // según: INSERT INTO usuario (nombre, apellido, email, telefono, fecha_alta) VALUES (?, ?, ?, ?, ?)
+              // El orden de los parámetros es: nombre, apellido, telefono, fecha_alta, activo
+              // según: INSERT INTO usuario (nombre, apellido, telefono, fecha_alta, activo) VALUES (?, ?, ?, ?, ?)
               
               // Generar ID autoincremental
               const maxId = mockData.usuarios.length > 0 
                 ? Math.max(...mockData.usuarios.map((u: any) => (u.id || 0)))
                 : 0;
               
-              // Debug: verificar parámetros recibidos
-              console.log('INSERT usuario - Parámetros recibidos:', params);
-              console.log('INSERT usuario - Número de parámetros:', params.length);
-              
-              // Asegurar que tenemos al menos 4 parámetros (nombre, apellido, email, telefono)
-              if (params.length < 4) {
+              // Asegurar que tenemos al menos 3 parámetros (nombre, apellido, telefono)
+              if (params.length < 3) {
                 throw new Error('Faltan parámetros requeridos');
               }
               
               // Validar que los parámetros estén en el orden correcto
               const nombre = String(params[0] || '').trim();
               const apellido = String(params[1] || '').trim();
-              const email = String(params[2] || '').toLowerCase().trim();
-              const telefono = String(params[3] || '').trim();
-              const fechaAlta = params[4] ? String(params[4]).trim() : new Date().toISOString().split('T')[0];
-              
-              // Debug: verificar valores extraídos
-              console.log('INSERT usuario - Valores extraídos:', { nombre, apellido, email, telefono, fechaAlta });
-              
-              // Validar que nombre y apellido no sean emails
-              if (nombre.includes('@')) {
-                console.error('ERROR: nombre contiene @, esto indica que los parámetros están desordenados');
-                throw new Error('Error: el nombre no puede ser un email. Verifique el orden de los campos.');
-              }
-              if (apellido.includes('@') && !email.includes('@')) {
-                console.error('ERROR: apellido contiene @ pero email no, esto indica que los parámetros están desordenados');
-                throw new Error('Error: el apellido no puede ser un email. Verifique el orden de los campos.');
-              }
+              const telefono = String(params[2] || '').trim();
+              const fechaAlta = params[3] ? String(params[3]).trim() : new Date().toISOString().split('T')[0];
+              const activo = params[4] !== undefined ? (params[4] === 1 || params[4] === true) : true;
               
               // Validar que los campos requeridos no estén vacíos
-              if (!nombre || !apellido || !email || !telefono) {
+              if (!nombre || !apellido || !telefono) {
                 throw new Error('Faltan campos requeridos');
               }
               
-              // Validar formato de email
-              const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-              if (!emailRegex.test(email)) {
-                throw new Error('Email inválido');
-              }
-              
-              // Validar que el email no sea una fecha
-              if (/^\d{4}-\d{2}-\d{2}$/.test(email)) {
-                throw new Error('Email inválido');
-              }
-              
               // Crear usuario con estructura explícita y orden correcto
-              // Asegurarse de que solo tenga los campos correctos (sin dni u otros campos extra)
-              // Crear objeto completamente nuevo sin ningún campo extra
               const usuario: any = {};
               usuario.id = maxId + 1;
               usuario.nombre = nombre;
               usuario.apellido = apellido;
-              usuario.email = email;
               usuario.telefono = telefono;
               usuario.fecha_alta = fechaAlta;
-              // NO incluir ningún otro campo (especialmente dni)
+              usuario.activo = activo;
               
-              // Debug: verificar usuario creado
-              console.log('INSERT usuario - Usuario creado:', usuario);
-              
-              // Validar que el usuario tenga la estructura correcta antes de guardarlo
-              if (!usuario.id || !usuario.nombre || !usuario.apellido || !usuario.email || !usuario.telefono) {
-                throw new Error('Error al crear usuario: estructura inválida');
-              }
-              
-              // Validar que nombre y apellido no sean emails
-              if (usuario.nombre.includes('@')) {
-                throw new Error('Error: el nombre contiene un email. Los parámetros pueden estar en el orden incorrecto.');
-              }
-              if (usuario.apellido.includes('@')) {
-                throw new Error('Error: el apellido contiene un email. Los parámetros pueden estar en el orden incorrecto.');
-              }
-              
-              // Limpiar datos corruptos del array antes de verificar duplicados
+              // Limpiar datos corruptos del array
               mockData.usuarios = mockData.usuarios
-                .filter((u: any) => {
-                  if (!u || !u.id || !u.email || !u.nombre || !u.apellido) return false;
-                  const emailStr = String(u.email || '');
-                  const apellidoStr = String(u.apellido || '');
-                  const nombreStr = String(u.nombre || '');
-                  // Eliminar si el email es una fecha, o si apellido/nombre contiene @
-                  if (/^\d{4}-\d{2}-\d{2}$/.test(emailStr)) return false;
-                  if (apellidoStr.includes('@') || nombreStr.includes('@')) return false;
-                  // Verificar que el email sea válido
-                  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailStr)) return false;
-                  return true;
-                })
                 .map((u: any) => normalizeUsuario(u))
                 .filter((u: any) => u !== null);
               
-              // Asegurarse de que los usuarios estén normalizados antes de verificar duplicados
-              // Esto es importante porque getMockData() normaliza, pero necesitamos asegurarnos aquí también
-              const usuariosNormalizados = mockData.usuarios
-                .map((u: any) => normalizeUsuario(u))
-                .filter((u: any) => u !== null);
+              // Agregar el usuario
+              mockData.usuarios.push(usuario);
               
-              // Verificar si el email ya existe (case-insensitive, normalizado)
-              const emailNormalizado = usuario.email.toLowerCase().trim();
-              
-              // Buscar duplicados normalizando todos los emails existentes
-              const exists = usuariosNormalizados.findIndex((u: any) => {
-                if (!u || !u.email) return false;
-                const emailExistente = String(u.email).toLowerCase().trim();
-                return emailExistente === emailNormalizado;
-              });
-              
-              if (exists === -1) {
-              // Actualizar el array con usuarios normalizados y agregar el nuevo
-              // Asegurarse de que el usuario solo tenga los campos correctos (sin dni u otros campos extra)
-              // Crear un objeto completamente nuevo sin ningún campo extra
-              const usuarioLimpio: any = {};
-              usuarioLimpio.id = usuario.id;
-              usuarioLimpio.nombre = usuario.nombre;
-              usuarioLimpio.apellido = usuario.apellido;
-              usuarioLimpio.email = usuario.email;
-              usuarioLimpio.fecha_alta = usuario.fecha_alta;
-              // NO incluir ningún otro campo (especialmente dni)
-                
-                // Debug: verificar usuario limpio antes de guardar
-                console.log('INSERT usuario - Usuario limpio a guardar:', usuarioLimpio);
-                
-                mockData.usuarios = usuariosNormalizados;
-                mockData.usuarios.push(usuarioLimpio);
-                
-                // Debug: verificar que se guardó correctamente
-                console.log('INSERT usuario - Usuario guardado en array:', mockData.usuarios[mockData.usuarios.length - 1]);
-                
-                // Devolver resultado similar a D1
-                return {
-                  success: true,
-                  meta: {
-                    last_row_id: usuario.id,
-                    changes: 1
-                  }
-                };
-              } else {
-                throw new Error('UNIQUE constraint failed: usuario.email');
-              }
+              // Devolver resultado similar a D1
+              return {
+                success: true,
+                meta: {
+                  last_row_id: usuario.id,
+                  changes: 1
+                }
+              };
             }
             if (query.includes('INSERT INTO clase')) {
               // Generar ID autoincremental
@@ -392,53 +329,63 @@ class MockDB {
               }
             }
             if (query.includes('INSERT INTO reserva')) {
+              // Asegurar que los IDs sean números
               const reserva = {
-                usuario_id: params[0],
-                clase_id: params[1],
-                created_at: new Date().toISOString()
+                usuario_id: Number(params[0]),
+                clase_id: Number(params[1]),
+                created_at: params[2] || new Date().toISOString()
               };
-              // Verificar si ya existe
+              
+              // Verificar si ya existe (comparando como números)
               const exists = mockData.reservas.findIndex(
-                (r: any) => r.usuario_id === reserva.usuario_id && r.clase_id === reserva.clase_id
+                (r: any) => Number(r.usuario_id) === reserva.usuario_id && Number(r.clase_id) === reserva.clase_id
               );
-              if (exists === -1) {
-                mockData.reservas.push(reserva);
+              if (exists !== -1) {
+                throw new Error('UNIQUE constraint failed: reserva.usuario_id, reserva.clase_id');
+              }
+              
+              // Verificar el cupo máximo (35 alumnos por clase)
+              const MAX_CUPO = 35;
+              const reservasClase = mockData.reservas.filter(
+                (r: any) => Number(r.clase_id) === reserva.clase_id
+              );
+              
+              if (reservasClase.length >= MAX_CUPO) {
+                const error: any = new Error(`Esta clase ya tiene el cupo completo (${MAX_CUPO} alumnos). No se pueden inscribir más alumnos.`);
+                error.code = 'CUPO_COMPLETO';
+                error.cupoMaximo = MAX_CUPO;
+                error.cupoActual = reservasClase.length;
+                throw error;
+              }
+              
+              mockData.reservas.push(reserva);
+              return {
+                success: true,
+                meta: {
+                  changes: 1
+                }
+              };
+            }
+            if (query.includes('UPDATE usuario')) {
+              // Orden: nombre, apellido, telefono, fecha_alta, activo, id
+              const id = params[5]; // último parámetro es el ID
+              const index = mockData.usuarios.findIndex((u: any) => u.id === id);
+              if (index !== -1) {
+                const activo = params[4] !== undefined ? (params[4] === 1 || params[4] === true) : true;
+                mockData.usuarios[index] = {
+                  ...mockData.usuarios[index],
+                  nombre: params[0],
+                  apellido: params[1],
+                  telefono: params[2],
+                  fecha_alta: params[3],
+                  activo: activo
+                };
                 return {
                   success: true,
                   meta: {
                     changes: 1
                   }
                 };
-              } else {
-                throw new Error('UNIQUE constraint failed: reserva.usuario_id, reserva.clase_id');
-              }
-            }
-            if (query.includes('UPDATE usuario')) {
-              const id = params[4]; // último parámetro es el ID
-              const index = mockData.usuarios.findIndex((u: any) => u.id === id);
-              if (index !== -1) {
-                const nuevoEmail = params[2]?.toLowerCase().trim() || params[2];
-                // Verificar si el email ya existe en otro usuario (no el que se está editando)
-                const emailExiste = mockData.usuarios.findIndex(
-                  (u: any, i: number) => i !== index && u.email?.toLowerCase().trim() === nuevoEmail
-                );
-                if (emailExiste === -1) {
-                  mockData.usuarios[index] = {
-                    ...mockData.usuarios[index],
-                    nombre: params[0],
-                    apellido: params[1],
-                    email: nuevoEmail,
-                    fecha_alta: params[3]
-                  };
-                  return {
-                    success: true,
-                    meta: {
-                      changes: 1
-                    }
-                  };
-                } else {
-                  throw new Error('UNIQUE constraint failed: usuario.email');
-                }
               }
               return {
                 success: true,
@@ -488,14 +435,31 @@ class MockDB {
                 changes: 0
               }
             };
-            } catch (error) {
-              throw error;
-            }
+          } catch (error) {
+            throw error;
+          }
           }
         };
       },
       first: async () => {
         const mockData = getMockData();
+        
+        // Manejar COUNT(*) queries (sin parámetros)
+        if (query.includes('SELECT COUNT(*)')) {
+          if (query.includes('FROM clase')) {
+            // COUNT de clases
+            return { count: mockData.clases.length };
+          }
+          if (query.includes('FROM usuario')) {
+            // COUNT de usuarios
+            return { count: mockData.usuarios.length };
+          }
+          if (query.includes('FROM reserva') && !query.includes('WHERE')) {
+            // COUNT de reservas (sin WHERE)
+            return { count: mockData.reservas.length };
+          }
+        }
+        
         if (query.includes('SELECT') && query.includes('WHERE')) {
           if (query.includes('usuario') && query.includes('id')) {
             // Sin bind, no podemos obtener el parámetro

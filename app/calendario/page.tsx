@@ -35,11 +35,7 @@ export default function CalendarioPage() {
   const [selectedClase, setSelectedClase] = useState<{ clase: Clase; fecha: Date } | null>(null);
   const [showAlumnosModal, setShowAlumnosModal] = useState(false);
   const [generatingReservas, setGeneratingReservas] = useState(false);
-
-  useEffect(() => {
-    loadReservas();
-    loadClases();
-  }, []);
+  const [searchAlumno, setSearchAlumno] = useState('');
 
   const loadReservas = async () => {
     try {
@@ -50,12 +46,15 @@ export default function CalendarioPage() {
       const data = await res.json();
       if (Array.isArray(data)) {
         setReservas(data);
+        return data;
       } else {
         setReservas([]);
+        return [];
       }
     } catch (error: any) {
       console.error('Error loading reservas:', error);
       setReservas([]);
+      return [];
     }
   };
 
@@ -68,14 +67,77 @@ export default function CalendarioPage() {
       const data = await res.json();
       if (Array.isArray(data)) {
         setClases(data);
+        return data;
       } else {
         setClases([]);
+        return [];
       }
     } catch (error: any) {
       console.error('Error loading clases:', error);
       setClases([]);
+      return [];
     }
   };
+
+  const handleGenerateRandomReservas = async (silent = false) => {
+    if (!silent && !confirm('¿Generar reservas aleatorias para varios alumnos? Esto creará reservas aleatorias.')) return;
+    
+    setGeneratingReservas(true);
+    try {
+      const res = await fetchWithErrorHandling('/api/reservas/generate-random', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      }, {
+        route: '/api/reservas/generate-random',
+        operation: 'generate_random_reservas'
+      });
+      
+      const data = await res.json();
+      if (res.ok) {
+        if (!silent) {
+          alert(data.message || 'Reservas generadas correctamente');
+        }
+        await loadReservas();
+      } else {
+        if (!silent) {
+          alert(data.error || 'Error al generar reservas');
+        }
+      }
+    } catch (error: any) {
+      if (!silent) {
+        alert(error.message || 'Error al generar reservas');
+      }
+    } finally {
+      setGeneratingReservas(false);
+    }
+  };
+
+  useEffect(() => {
+    const initData = async () => {
+      const clasesData = await loadClases();
+      const reservasData = await loadReservas();
+      
+      // Si no hay reservas y hay clases disponibles, generar algunas automáticamente
+      if (Array.isArray(reservasData) && reservasData.length === 0 && Array.isArray(clasesData) && clasesData.length > 0) {
+        // Verificar que haya usuarios activos antes de generar
+        try {
+          const usuariosRes = await fetchWithErrorHandling('/api/usuarios', {}, {
+            route: '/api/usuarios',
+            operation: 'load_usuarios'
+          });
+          const usuarios = await usuariosRes.json();
+          if (Array.isArray(usuarios) && usuarios.filter((u: any) => u.activo).length > 0) {
+            await handleGenerateRandomReservas(true);
+          }
+        } catch (error) {
+          // Silenciar error, solo es para inicialización
+          console.error('Error al verificar usuarios:', error);
+        }
+      }
+    };
+    initData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const getDiaNombre = (dia: string) => {
     const dias: { [key: string]: string } = {
@@ -89,17 +151,22 @@ export default function CalendarioPage() {
 
   // Generar calendario de 30 días exactos desde hoy
   const generateCalendar = (): CalendarItem[] => {
+    if (!clases || clases.length === 0) {
+      return [];
+    }
+    
     const today = new Date();
     today.setHours(0, 0, 0, 0); // Normalizar a medianoche
     const calendar: CalendarItem[] = [];
 
     // 30 días exactos desde hoy (incluyendo hoy)
-    // i=0 es hoy, i=29 es el día 30 desde hoy
-    // Si hoy es jueves 11 dic, el día 30 es viernes 10 ene
-    // El sábado 10 ene sería el día 31, pero si el usuario quiere incluir el sábado más cercano dentro de 30 días,
-    // verificamos si el día 30 es sábado y lo incluimos
-    const maxDays = 30;
-    for (let i = 0; i < maxDays; i++) {
+    // i=0 es hoy, i=30 es el día 31 desde hoy
+    // Si hoy es jueves 11 dic, el día 30 es sábado 10 ene (29 días después)
+    // Para incluir exactamente 30 días desde hoy, necesitamos i <= 30 (31 días totales)
+    // Pero si queremos "30 días adelante", sería hasta el día 30 inclusive
+    // Calculamos: si hoy es jueves 11 dic, el sábado 10 ene es el día 30 (29 días después)
+    // Entonces necesitamos incluir hasta i=30 para capturar el sábado 10 ene
+    for (let i = 0; i <= 30; i++) {
       const fecha = new Date(today);
       fecha.setDate(today.getDate() + i);
       
@@ -109,10 +176,10 @@ export default function CalendarioPage() {
       
       if (diaClase) {
         const clasesDelDia = clases
-          .filter(c => c.dia === diaClase)
+          .filter(c => c && c.dia === diaClase)
           .map(c => {
             // Obtener reservas para esta clase específica
-            const reservasClase = reservas.filter(r => r.clase_id === c.id);
+            const reservasClase = (reservas || []).filter(r => r && r.clase_id === c.id);
             return { 
               clase: c, 
               fecha: new Date(fecha),
@@ -152,31 +219,17 @@ export default function CalendarioPage() {
     return reservas.filter(r => r.clase_id === claseId);
   };
 
-  const handleGenerateRandomReservas = async () => {
-    if (!confirm('¿Generar reservas aleatorias para varios alumnos? Esto creará reservas aleatorias.')) return;
-    
-    setGeneratingReservas(true);
-    try {
-      const res = await fetchWithErrorHandling('/api/reservas/generate-random', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-      }, {
-        route: '/api/reservas/generate-random',
-        operation: 'generate_random_reservas'
-      });
-      
-      const data = await res.json();
-      if (res.ok) {
-        alert(data.message || 'Reservas generadas correctamente');
-        loadReservas();
-      } else {
-        alert(data.error || 'Error al generar reservas');
-      }
-    } catch (error: any) {
-      alert(error.message || 'Error al generar reservas');
-    } finally {
-      setGeneratingReservas(false);
+  const getAlumnosFiltrados = (claseId: number) => {
+    const alumnos = getAlumnosInscritos(claseId);
+    if (!searchAlumno.trim()) {
+      return alumnos;
     }
+    const search = searchAlumno.toLowerCase();
+    return alumnos.filter(alumno => 
+      (alumno.nombre || '').toLowerCase().includes(search) ||
+      (alumno.apellido || '').toLowerCase().includes(search) ||
+      `${alumno.apellido}, ${alumno.nombre}`.toLowerCase().includes(search)
+    );
   };
 
   return (
@@ -272,32 +325,72 @@ export default function CalendarioPage() {
                 {getAlumnosInscritos(selectedClase.clase.id).length === 0 ? (
                   <p className="text-gray-600 text-center py-8">No hay alumnos inscritos en esta clase.</p>
                 ) : (
-                  <div className="space-y-1">
-                    {getAlumnosInscritos(selectedClase.clase.id).map((reserva, idx) => (
-                      <div
-                        key={idx}
-                        className="flex items-center justify-between px-3 py-1.5 rounded-lg border border-gray-200 bg-gray-50"
-                      >
-                        <div className="flex-1 min-w-0">
-                          <span className="text-sm font-medium text-gray-900">
-                            {reserva.apellido}, {reserva.nombre}
-                          </span>
-                        </div>
+                  <>
+                    {/* Buscador de alumnos */}
+                    <div className="mb-4">
+                      <div className="relative">
+                        <input
+                          type="text"
+                          placeholder="Buscar alumno por nombre..."
+                          value={searchAlumno}
+                          onChange={(e) => setSearchAlumno(e.target.value)}
+                          className="w-full px-4 py-2 pl-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-gray-900 placeholder:text-gray-500"
+                        />
+                        <svg
+                          className="absolute left-3 top-2.5 h-5 w-5 text-gray-400"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                        </svg>
+                        {searchAlumno && (
+                          <button
+                            onClick={() => setSearchAlumno('')}
+                            className="absolute right-3 top-2.5 text-gray-400 hover:text-gray-600"
+                          >
+                            ✕
+                          </button>
+                        )}
                       </div>
-                    ))}
-                  </div>
+                      {searchAlumno && (
+                        <p className="mt-2 text-sm text-gray-600">
+                          Mostrando {getAlumnosFiltrados(selectedClase.clase.id).length} de {getAlumnosInscritos(selectedClase.clase.id).length} alumnos
+                        </p>
+                      )}
+                    </div>
+                    {getAlumnosFiltrados(selectedClase.clase.id).length === 0 ? (
+                      <p className="text-gray-600 text-center py-8">No se encontraron alumnos que coincidan con la búsqueda.</p>
+                    ) : (
+                      <div className="space-y-1">
+                        {getAlumnosFiltrados(selectedClase.clase.id).map((reserva, idx) => (
+                          <div
+                            key={idx}
+                            className="flex items-center justify-between px-3 py-1.5 rounded-lg border border-gray-200 bg-gray-50"
+                          >
+                            <div className="flex-1 min-w-0">
+                              <span className="text-sm font-medium text-gray-900">
+                                {reserva.apellido}, {reserva.nombre}
+                              </span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
               <div className="p-4 sm:p-6 flex-shrink-0 border-t border-gray-200">
-                <button
-                  onClick={() => {
-                    setShowAlumnosModal(false);
-                    setSelectedClase(null);
-                  }}
-                  className="w-full bg-purple-600 text-white px-4 py-3 rounded-lg hover:bg-purple-700 transition-colors font-medium text-base"
-                >
-                  Cerrar
-                </button>
+                  <button
+                    onClick={() => {
+                      setShowAlumnosModal(false);
+                      setSelectedClase(null);
+                      setSearchAlumno('');
+                    }}
+                    className="w-full bg-purple-600 text-white px-4 py-3 rounded-lg hover:bg-purple-700 transition-colors font-medium text-base"
+                  >
+                    Cerrar
+                  </button>
               </div>
             </div>
           </div>

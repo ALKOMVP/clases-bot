@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Navbar from '@/components/Navbar';
+import TableScrollContainer from '@/components/TableScrollContainer';
 import { fetchWithErrorHandling } from '@/lib/frontend-error-handler';
 
 interface Clase {
@@ -15,6 +16,8 @@ export default function ClasesPage() {
   const [clases, setClases] = useState<Clase[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage] = useState(12); // 12 items por página
   const [showForm, setShowForm] = useState(false);
   const [formData, setFormData] = useState({
     dia: 'Lun',
@@ -127,7 +130,7 @@ export default function ClasesPage() {
     return dias[dia] || dia;
   };
 
-  // Filtrar clases según el término de búsqueda
+  // Filtrar clases según el término de búsqueda (aplicar filtros a TODOS los items)
   const filteredClases = clases.filter(clase => {
     if (!searchTerm) return true;
     const search = searchTerm.toLowerCase();
@@ -139,21 +142,32 @@ export default function ClasesPage() {
     );
   });
 
+  // Calcular paginación DESPUÉS de aplicar filtros
+  const totalPages = Math.ceil(filteredClases.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const paginatedClases = filteredClases.slice(startIndex, endIndex);
+
+  // Resetear a página 1 cuando cambia el término de búsqueda
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm]);
+
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 overflow-x-hidden">
       <Navbar />
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="flex justify-between items-center mb-6">
+      <div className="max-w-7xl mx-auto px-2 sm:px-4 lg:px-8 py-4 sm:py-6 lg:py-8">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 sm:gap-0 mb-4 sm:mb-6">
           <div>
-            <h1 className="text-4xl font-bold text-gray-900">Clases Semanales</h1>
-            <p className="text-gray-600 mt-2">Horarios fijos que se repiten todas las semanas</p>
+            <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900">Clases Semanales</h1>
+            <p className="text-gray-600 mt-1 sm:mt-2 text-sm sm:text-base">Horarios fijos que se repiten todas las semanas</p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 w-full sm:w-auto">
             {clases.length === 0 && (
               <button
                 onClick={handleInitialize}
                 disabled={loading}
-                className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50"
+                className="bg-purple-600 text-white px-3 sm:px-4 py-2 rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50 text-sm sm:text-base flex-1 sm:flex-none"
               >
                 {loading ? 'Inicializando...' : 'Inicializar Clases'}
               </button>
@@ -163,7 +177,7 @@ export default function ClasesPage() {
                 setShowForm(true);
                 setFormData({ dia: 'Lun', hora: '', nombre: 'Yoga' });
               }}
-              className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition-colors"
+              className="bg-purple-600 text-white px-3 sm:px-4 py-2 rounded-lg hover:bg-purple-700 transition-colors text-sm sm:text-base flex-1 sm:flex-none"
             >
               + Nueva Clase
             </button>
@@ -171,10 +185,10 @@ export default function ClasesPage() {
         </div>
 
         {showForm && (
-          <div className="bg-white p-6 rounded-lg shadow-md mb-6">
-            <h2 className="text-2xl font-semibold mb-4">Nueva Clase</h2>
+          <div className="bg-white p-4 sm:p-6 rounded-lg shadow-md mb-4 sm:mb-6">
+            <h2 className="text-xl sm:text-2xl font-semibold mb-4 text-gray-900">Nueva Clase</h2>
             <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Día *
@@ -182,7 +196,7 @@ export default function ClasesPage() {
                   <select
                     value={formData.dia}
                     onChange={(e) => setFormData({ ...formData, dia: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-gray-900"
                     required
                   >
                     <option value="Lun">Lunes</option>
@@ -200,7 +214,7 @@ export default function ClasesPage() {
                     value={formData.hora}
                     onChange={(e) => setFormData({ ...formData, hora: e.target.value })}
                     placeholder="17:30"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-gray-900 placeholder:text-gray-500"
                     required
                     pattern="^([0-1][0-9]|2[0-3]):[0-5][0-9]$"
                   />
@@ -213,16 +227,16 @@ export default function ClasesPage() {
                     type="text"
                     value={formData.nombre}
                     onChange={(e) => setFormData({ ...formData, nombre: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-gray-900 placeholder:text-gray-500"
                     required
                   />
                 </div>
               </div>
-              <div className="flex gap-2">
+              <div className="flex flex-col sm:flex-row gap-2">
                 <button
                   type="submit"
                   disabled={loading}
-                  className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 disabled:opacity-50"
+                  className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 disabled:opacity-50 text-sm sm:text-base w-full sm:w-auto"
                 >
                   {loading ? 'Guardando...' : 'Guardar'}
                 </button>
@@ -232,7 +246,7 @@ export default function ClasesPage() {
                     setShowForm(false);
                     setFormData({ dia: 'Lun', hora: '', nombre: 'Yoga' });
                   }}
-                  className="bg-gray-300 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-400"
+                  className="bg-gray-300 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-400 text-sm sm:text-base w-full sm:w-auto"
                 >
                   Cancelar
                 </button>
@@ -250,7 +264,7 @@ export default function ClasesPage() {
                 placeholder="Buscar por día, hora o nombre..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full px-4 py-2 pl-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                className="w-full px-4 py-2 pl-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-gray-900 placeholder:text-gray-500"
               />
               <svg
                 className="absolute left-3 top-2.5 h-5 w-5 text-gray-400"
@@ -291,37 +305,93 @@ export default function ClasesPage() {
             </div>
           </div>
         ) : (
-          <div className="bg-white rounded-lg shadow-md overflow-hidden">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Día</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Hora</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Nombre</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Acciones</th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {filteredClases.map((clase) => (
-                  <tr key={clase.id}>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                      {getDiaNombre(clase.dia)}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{clase.hora}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{clase.nombre}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                      <button
-                        onClick={() => handleDelete(clase.id)}
-                        className="text-red-600 hover:text-red-900"
-                      >
-                        Eliminar
-                      </button>
-                    </td>
+          <>
+            <div className="bg-white rounded-lg shadow-md overflow-hidden">
+              <TableScrollContainer className="mx-0">
+                <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-4 sm:px-6 py-2 text-left text-xs font-medium text-gray-500 uppercase">Día</th>
+                    <th className="px-4 sm:px-6 py-2 text-left text-xs font-medium text-gray-500 uppercase">Hora</th>
+                    <th className="px-4 sm:px-6 py-2 text-left text-xs font-medium text-gray-500 uppercase">Nombre</th>
+                    <th className="px-4 sm:px-6 py-2 text-left text-xs font-medium text-gray-500 uppercase">Acciones</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {paginatedClases.map((clase) => (
+                    <tr key={clase.id}>
+                      <td className="px-4 sm:px-6 py-2 whitespace-nowrap text-sm font-medium text-gray-900">
+                        {getDiaNombre(clase.dia)}
+                      </td>
+                      <td className="px-4 sm:px-6 py-2 whitespace-nowrap text-sm text-gray-900">{clase.hora}</td>
+                      <td className="px-4 sm:px-6 py-2 whitespace-nowrap text-sm text-gray-900">{clase.nombre}</td>
+                      <td className="px-4 sm:px-6 py-2 whitespace-nowrap text-sm font-medium">
+                        <button
+                          onClick={() => handleDelete(clase.id)}
+                          className="px-3 py-2 sm:px-0 sm:py-0 rounded-md sm:rounded-none bg-red-50 sm:bg-transparent text-red-600 hover:text-red-900 hover:bg-red-100 sm:hover:bg-transparent text-sm font-medium transition-colors"
+                        >
+                          Eliminar
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              </TableScrollContainer>
+            </div>
+
+            {/* Controles de paginación */}
+            {totalPages > 1 && (
+              <div className="bg-white px-4 py-3 border-t border-gray-200 flex flex-col sm:flex-row items-center justify-between gap-4 mt-4 rounded-lg shadow-md">
+                <div className="text-sm text-gray-700">
+                  Mostrando {startIndex + 1} a {Math.min(endIndex, filteredClases.length)} de {filteredClases.length} clases
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                    disabled={currentPage === 1}
+                    className="px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Anterior
+                  </button>
+                  <div className="flex items-center gap-1">
+                    {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                      let pageNum;
+                      if (totalPages <= 5) {
+                        pageNum = i + 1;
+                      } else if (currentPage <= 3) {
+                        pageNum = i + 1;
+                      } else if (currentPage >= totalPages - 2) {
+                        pageNum = totalPages - 4 + i;
+                      } else {
+                        pageNum = currentPage - 2 + i;
+                      }
+                      return (
+                        <button
+                          key={pageNum}
+                          onClick={() => setCurrentPage(pageNum)}
+                          className={`px-3 py-2 text-sm font-medium rounded-lg ${
+                            currentPage === pageNum
+                              ? 'bg-purple-600 text-white'
+                              : 'text-gray-700 bg-white border border-gray-300 hover:bg-gray-50'
+                          }`}
+                        >
+                          {pageNum}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <button
+                    onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                    disabled={currentPage === totalPages}
+                    className="px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Siguiente
+                  </button>
+                </div>
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>

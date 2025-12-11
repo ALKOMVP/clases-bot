@@ -34,7 +34,7 @@ export async function GET(request: NextRequest) {
     const clase_id = searchParams.get('clase_id');
 
     let query = `
-      SELECT r.*, u.nombre, u.apellido, u.email, c.dia, c.hora, c.nombre as clase_nombre
+      SELECT r.*, u.nombre, u.apellido, c.dia, c.hora, c.nombre as clase_nombre
       FROM reserva r
       JOIN usuario u ON r.usuario_id = u.id
       JOIN clase c ON r.clase_id = c.id
@@ -123,6 +123,35 @@ export async function POST(request: NextRequest) {
 
     if (!usuario_id || !clase_id) {
       return NextResponse.json({ error: 'Faltan campos requeridos' }, { status: 400 });
+    }
+
+    // Verificar si el usuario ya está inscrito en esta clase
+    const existingReserva = await db.prepare(
+      'SELECT * FROM reserva WHERE usuario_id = ? AND clase_id = ?'
+    ).bind(usuario_id, clase_id).first();
+
+    if (existingReserva) {
+      return NextResponse.json({ 
+        error: 'El alumno ya está inscrito en esta clase',
+        code: 'ALREADY_ENROLLED'
+      }, { status: 400 });
+    }
+
+    // Verificar el cupo máximo (35 alumnos por clase)
+    const MAX_CUPO = 35;
+    const reservasCount = await db.prepare(
+      'SELECT COUNT(*) as count FROM reserva WHERE clase_id = ?'
+    ).bind(clase_id).first();
+
+    const currentCount = (reservasCount as any)?.count || 0;
+    
+    if (currentCount >= MAX_CUPO) {
+      return NextResponse.json({ 
+        error: `Esta clase ya tiene el cupo completo (${MAX_CUPO} alumnos). No se pueden inscribir más alumnos.`,
+        code: 'CUPO_COMPLETO',
+        cupoMaximo: MAX_CUPO,
+        cupoActual: currentCount
+      }, { status: 400 });
     }
 
     await db.prepare(
