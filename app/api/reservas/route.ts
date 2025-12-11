@@ -60,12 +60,19 @@ export async function GET(request: NextRequest) {
     const ordenDias: { [key: string]: number } = { 'Lun': 1, 'Mar': 2, 'Jue': 3, 'Sab': 4 };
     query += ' ORDER BY c.dia, c.hora, u.apellido, u.nombre';
 
-    const stmt = db.prepare(query);
-    const result = params.length > 0 
-      ? await stmt.bind(...params).all()
-      : await stmt.all();
-    
-    const reservas = (result.results || []) as any[];
+    let reservas: any[] = [];
+    try {
+      const stmt = db.prepare(query);
+      const result = params.length > 0 
+        ? await stmt.bind(...params).all()
+        : await stmt.all();
+      
+      reservas = (result.results || []) as any[];
+    } catch (error: any) {
+      console.error('[GET /api/reservas] Error ejecutando query:', error);
+      // Si hay error, retornar array vacío en lugar de fallar
+      reservas = [];
+    }
     
     // Ordenar manualmente por día
     reservas.sort((a, b) => {

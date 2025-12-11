@@ -91,8 +91,9 @@ export async function POST(request: NextRequest) {
       
       const telefono = telefonos[i] || `+54 11 ${String(i).padStart(4, '0')}-${String(i + 1000).padStart(4, '0')}`;
       const fechaAlta = generateFechaAlta();
-      // 90% activos, 10% desactivados
-      const activo = Math.random() > 0.1 ? 1 : 0;
+      // Por defecto todos activos (90% activos, 10% desactivados solo si se quiere variación)
+      // Cambiado a todos activos por defecto para evitar problemas
+      const activo = 1; // Todos activos por defecto
 
       try {
         const result = await db.prepare(

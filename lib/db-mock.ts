@@ -198,15 +198,18 @@ class MockDB {
           // Si hay JOIN, construir resultados con datos relacionados
           if (query.includes('JOIN usuario') || query.includes('JOIN clase')) {
             // Filtrar solo reservas de usuarios activos si la query incluye WHERE u.activo = 1
-            const soloActivos = query.includes('WHERE') && query.includes('activo') && query.includes('= 1');
+            const soloActivos = query.includes('WHERE') && query.includes('activo') && (query.includes('= 1') || query.includes('u.activo = 1'));
             
             for (const reserva of mockData.reservas) {
               const usuario = mockData.usuarios.find((u: any) => u.id === reserva.usuario_id);
               const clase = mockData.clases.find((c: any) => c.id === reserva.clase_id);
               
               // Si solo queremos activos, filtrar usuarios desactivados
-              if (soloActivos && usuario && (!usuario.activo || usuario.activo === 0)) {
-                continue;
+              if (soloActivos && usuario) {
+                const usuarioNormalizado = normalizeUsuario(usuario);
+                if (!usuarioNormalizado || !usuarioNormalizado.activo) {
+                  continue;
+                }
               }
               
               if (usuario && clase) {
@@ -220,21 +223,34 @@ class MockDB {
                 });
               }
             }
-              } else {
-                results = [...mockData.reservas];
-              }
-              
-              // Aplicar filtros si hay WHERE
-              if (query.includes('WHERE')) {
-                if (params.length > 0) {
-                  if (query.includes('r.usuario_id = ?')) {
-                    results = results.filter((r: any) => r.usuario_id === parseInt(params[0]));
-                  }
-                  if (query.includes('r.clase_id = ?')) {
-                    results = results.filter((r: any) => r.clase_id === parseInt(params[0]));
+            
+            // Aplicar filtros adicionales si hay WHERE con parámetros
+            if (query.includes('WHERE') && params.length > 0) {
+              if (query.includes('r.usuario_id = ?') || query.includes('usuario_id = ?')) {
+                const usuarioIdIndex = query.indexOf('usuario_id = ?');
+                if (usuarioIdIndex !== -1) {
+                  // Encontrar qué parámetro corresponde a usuario_id
+                  const beforeUsuarioId = query.substring(0, usuarioIdIndex);
+                  const paramIndex = (beforeUsuarioId.match(/\?/g) || []).length;
+                  if (params[paramIndex] !== undefined) {
+                    results = results.filter((r: any) => Number(r.usuario_id) === Number(params[paramIndex]));
                   }
                 }
               }
+              if (query.includes('r.clase_id = ?') || query.includes('clase_id = ?')) {
+                const claseIdIndex = query.indexOf('clase_id = ?');
+                if (claseIdIndex !== -1) {
+                  const beforeClaseId = query.substring(0, claseIdIndex);
+                  const paramIndex = (beforeClaseId.match(/\?/g) || []).length;
+                  if (params[paramIndex] !== undefined) {
+                    results = results.filter((r: any) => Number(r.clase_id) === Number(params[paramIndex]));
+                  }
+                }
+              }
+            }
+          } else {
+            results = [...mockData.reservas];
+          }
               
               // Aplicar ORDER BY
               if (query.includes('ORDER BY')) {
@@ -390,26 +406,52 @@ class MockDB {
               };
             }
             if (query.includes('UPDATE usuario')) {
-              // Orden: nombre, apellido, telefono, fecha_alta, activo, id
-              const id = params[5]; // último parámetro es el ID
-              const index = mockData.usuarios.findIndex((u: any) => u.id === id);
-              if (index !== -1) {
-                const activo = params[4] !== undefined ? (params[4] === 1 || params[4] === true) : true;
-                mockData.usuarios[index] = {
-                  ...mockData.usuarios[index],
-                  nombre: params[0],
-                  apellido: params[1],
-                  telefono: params[2],
-                  fecha_alta: params[3],
-                  activo: activo
-                };
+              // Caso 1: UPDATE usuario SET activo = ? WHERE id = ?
+              if (query.includes('SET activo = ?') && query.includes('WHERE id = ?')) {
+                const activo = params[0] === 1 || params[0] === true;
+                const id = params[1];
+                const index = mockData.usuarios.findIndex((u: any) => Number(u.id) === Number(id));
+                if (index !== -1) {
+                  mockData.usuarios[index].activo = activo ? 1 : 0;
+                  return {
+                    success: true,
+                    meta: {
+                      changes: 1
+                    }
+                  };
+                }
                 return {
                   success: true,
                   meta: {
-                    changes: 1
+                    changes: 0
                   }
                 };
               }
+              
+              // Caso 2: UPDATE completo con todos los campos
+              // Orden: nombre, apellido, telefono, fecha_alta, activo, id
+              if (params.length >= 6) {
+                const id = params[5]; // último parámetro es el ID
+                const index = mockData.usuarios.findIndex((u: any) => Number(u.id) === Number(id));
+                if (index !== -1) {
+                  const activo = params[4] !== undefined ? (params[4] === 1 || params[4] === true) : true;
+                  mockData.usuarios[index] = {
+                    ...mockData.usuarios[index],
+                    nombre: params[0],
+                    apellido: params[1],
+                    telefono: params[2],
+                    fecha_alta: params[3],
+                    activo: activo ? 1 : 0
+                  };
+                  return {
+                    success: true,
+                    meta: {
+                      changes: 1
+                    }
+                  };
+                }
+              }
+              
               return {
                 success: true,
                 meta: {

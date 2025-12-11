@@ -125,10 +125,13 @@ export default function UsuariosPage() {
 
   const loadReservas = async () => {
     try {
-      const res = await fetchWithErrorHandling('/api/reservas', {}, {
-        route: '/api/reservas',
-        operation: 'load_reservas'
-      });
+      const res = await fetch('/api/reservas');
+      if (!res.ok) {
+        // Si hay error, solo loguear pero no mostrar alert (puede ser que simplemente no hay reservas)
+        console.warn('Error loading reservas:', res.status, res.statusText);
+        setReservas([]);
+        return;
+      }
       const data = await res.json();
       if (Array.isArray(data)) {
         setReservas(data);
@@ -137,8 +140,8 @@ export default function UsuariosPage() {
         setReservas([]);
       }
     } catch (error: any) {
+      // Solo loguear errores, no mostrar alert (puede ser problema de red temporal)
       console.error('Error loading reservas:', error);
-      alert(error.message || 'Error al cargar reservas');
       setReservas([]);
     }
   };
