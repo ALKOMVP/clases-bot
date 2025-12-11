@@ -41,9 +41,10 @@ export async function GET(request: NextRequest) {
     const usuarios = (result?.results || []) as any[];
     
     // Convertir activo de INTEGER a boolean
+    // Por defecto todos los usuarios están activos (solo desactivar si explícitamente es 0 o false)
     const usuariosNormalizados = usuarios.map((u: any) => ({
       ...u,
-      activo: u.activo === 1 || u.activo === true
+      activo: u.activo === 0 || u.activo === false ? false : true
     }));
     
     console.log('[GET /api/usuarios] Success', { count: usuariosNormalizados.length });

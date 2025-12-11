@@ -367,7 +367,30 @@ export default function UsuariosPage() {
       <div className="max-w-7xl mx-auto px-2 sm:px-4 lg:px-8 py-4 sm:py-6 lg:py-8">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 sm:gap-0 mb-4 sm:mb-6">
           <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900">Alumnos</h1>
-          <button
+          <div className="flex gap-2 w-full sm:w-auto">
+            {usuarios.filter(u => !u.activo).length > 0 && (
+              <button
+                onClick={async () => {
+                  if (!confirm(`¿Activar todos los ${usuarios.filter(u => !u.activo).length} alumnos desactivados?`)) return;
+                  try {
+                    const res = await fetch('/api/usuarios/activate-all', { method: 'POST' });
+                    const data = await res.json();
+                    if (res.ok) {
+                      alert(data.message || 'Usuarios activados correctamente');
+                      loadUsuarios();
+                    } else {
+                      alert(data.error || 'Error al activar usuarios');
+                    }
+                  } catch (error: any) {
+                    alert('Error al activar usuarios: ' + error.message);
+                  }
+                }}
+                className="bg-green-600 text-white px-3 sm:px-4 py-2 rounded-lg hover:bg-green-700 transition-colors text-sm sm:text-base"
+              >
+                Activar Todos
+              </button>
+            )}
+            <button
               onClick={() => {
                 setShowForm(true);
                 setEditing(null);
@@ -379,10 +402,11 @@ export default function UsuariosPage() {
                   fecha_alta: new Date().toISOString().split('T')[0],
                 });
               }}
-            className="bg-purple-600 text-white px-3 sm:px-4 py-2 rounded-lg hover:bg-purple-700 transition-colors text-sm sm:text-base w-full sm:w-auto"
-          >
-            + Nuevo Alumno
-          </button>
+              className="bg-purple-600 text-white px-3 sm:px-4 py-2 rounded-lg hover:bg-purple-700 transition-colors text-sm sm:text-base w-full sm:w-auto"
+            >
+              + Nuevo Alumno
+            </button>
+          </div>
         </div>
 
         {/* Buscador y Filtros */}

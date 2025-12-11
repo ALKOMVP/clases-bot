@@ -22,7 +22,15 @@ function normalizeUsuario(u: any) {
   usuarioNormalizado.apellido = apellidoStr;
   usuarioNormalizado.telefono = u.telefono ? String(u.telefono).trim() : '';
   usuarioNormalizado.fecha_alta = u.fecha_alta ? String(u.fecha_alta).trim() : new Date().toISOString().split('T')[0];
-  usuarioNormalizado.activo = u.activo !== undefined ? (u.activo === 1 || u.activo === true) : true;
+  // Por defecto todos los usuarios están activos
+  // Solo desactivar si explícitamente es false o 0
+  // Si es undefined, null, o cualquier otro valor, establecer como activo
+  if (u.activo === 0 || u.activo === false) {
+    usuarioNormalizado.activo = false;
+  } else {
+    // Por defecto activo = true (incluye undefined, null, 1, true, o cualquier otro valor)
+    usuarioNormalizado.activo = true;
+  }
   
   return usuarioNormalizado;
 }
@@ -305,7 +313,8 @@ class MockDB {
               usuario.apellido = apellido;
               usuario.telefono = telefono;
               usuario.fecha_alta = fechaAlta;
-              usuario.activo = activo;
+              // Asegurar que activo sea 1 (activo) por defecto
+              usuario.activo = activo ? 1 : 0;
               
               // Limpiar datos corruptos del array
               mockData.usuarios = mockData.usuarios
