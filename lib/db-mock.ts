@@ -191,27 +191,35 @@ class MockDB {
               
               return { results };
             }
-            // Reservas
-            if (query.includes('FROM reserva')) {
-              let results: any[] = [];
+        // Reservas
+        if (query.includes('FROM reserva')) {
+          let results: any[] = [];
+          
+          // Si hay JOIN, construir resultados con datos relacionados
+          if (query.includes('JOIN usuario') || query.includes('JOIN clase')) {
+            // Filtrar solo reservas de usuarios activos si la query incluye WHERE u.activo = 1
+            const soloActivos = query.includes('WHERE') && query.includes('activo') && query.includes('= 1');
+            
+            for (const reserva of mockData.reservas) {
+              const usuario = mockData.usuarios.find((u: any) => u.id === reserva.usuario_id);
+              const clase = mockData.clases.find((c: any) => c.id === reserva.clase_id);
               
-              // Si hay JOIN, construir resultados con datos relacionados
-              if (query.includes('JOIN usuario') || query.includes('JOIN clase')) {
-                for (const reserva of mockData.reservas) {
-                  const usuario = mockData.usuarios.find((u: any) => u.id === reserva.usuario_id);
-                  const clase = mockData.clases.find((c: any) => c.id === reserva.clase_id);
-                  
-                  if (usuario && clase) {
-                    results.push({
-                      ...reserva,
-                      nombre: usuario.nombre,
-                      apellido: usuario.apellido,
-                      dia: clase.dia,
-                      hora: clase.hora,
-                      clase_nombre: clase.nombre
-                    });
-                  }
-                }
+              // Si solo queremos activos, filtrar usuarios desactivados
+              if (soloActivos && usuario && (!usuario.activo || usuario.activo === 0)) {
+                continue;
+              }
+              
+              if (usuario && clase) {
+                results.push({
+                  ...reserva,
+                  nombre: usuario.nombre,
+                  apellido: usuario.apellido,
+                  dia: clase.dia,
+                  hora: clase.hora,
+                  clase_nombre: clase.nombre
+                });
+              }
+            }
               } else {
                 results = [...mockData.reservas];
               }
@@ -335,6 +343,21 @@ class MockDB {
                 clase_id: Number(params[1]),
                 created_at: params[2] || new Date().toISOString()
               };
+              
+              // Verificar que el usuario existe y está activo
+              const usuario = mockData.usuarios.find((u: any) => Number(u.id) === reserva.usuario_id);
+              if (!usuario) {
+                const error: any = new Error('El alumno no existe');
+                error.code = 'USUARIO_NO_EXISTE';
+                throw error;
+              }
+              
+              const usuarioActivo = usuario.activo === true || usuario.activo === 1;
+              if (!usuarioActivo) {
+                const error: any = new Error('No se pueden inscribir alumnos desactivados a clases');
+                error.code = 'USUARIO_DESACTIVADO';
+                throw error;
+              }
               
               // Verificar si ya existe (comparando como números)
               const exists = mockData.reservas.findIndex(
@@ -515,22 +538,29 @@ class MockDB {
           
           return { results };
         }
-        // Reservas
+        // Reservas (segunda sección - método all sin bind)
         if (query.includes('FROM reserva')) {
           let results: any[] = [];
           
           // Si hay JOIN, construir resultados con datos relacionados
           if (query.includes('JOIN usuario') || query.includes('JOIN clase')) {
+            // Filtrar solo reservas de usuarios activos si la query incluye WHERE u.activo = 1
+            const soloActivos = query.includes('WHERE') && query.includes('activo') && query.includes('= 1');
+            
             for (const reserva of mockData.reservas) {
               const usuario = mockData.usuarios.find((u: any) => u.id === reserva.usuario_id);
               const clase = mockData.clases.find((c: any) => c.id === reserva.clase_id);
+              
+              // Si solo queremos activos, filtrar usuarios desactivados
+              if (soloActivos && usuario && (!usuario.activo || usuario.activo === 0)) {
+                continue;
+              }
               
               if (usuario && clase) {
                 results.push({
                   ...reserva,
                   nombre: usuario.nombre,
                   apellido: usuario.apellido,
-                  email: usuario.email,
                   dia: clase.dia,
                   hora: clase.hora,
                   clase_nombre: clase.nombre

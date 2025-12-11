@@ -38,6 +38,7 @@ export async function GET(request: NextRequest) {
       FROM reserva r
       JOIN usuario u ON r.usuario_id = u.id
       JOIN clase c ON r.clase_id = c.id
+      WHERE u.activo = 1
     `;
     const conditions: string[] = [];
     const params: any[] = [];
@@ -52,7 +53,7 @@ export async function GET(request: NextRequest) {
     }
 
     if (conditions.length > 0) {
-      query += ' WHERE ' + conditions.join(' AND ');
+      query += ' AND ' + conditions.join(' AND ');
     }
 
     // Ordenar por día y hora
@@ -123,6 +124,23 @@ export async function POST(request: NextRequest) {
 
     if (!usuario_id || !clase_id) {
       return NextResponse.json({ error: 'Faltan campos requeridos' }, { status: 400 });
+    }
+
+    // Verificar que el usuario existe y está activo
+    const usuario = await db.prepare('SELECT id, activo FROM usuario WHERE id = ?').bind(usuario_id).first();
+    
+    if (!usuario) {
+      return NextResponse.json({ 
+        error: 'El alumno no existe',
+        code: 'USUARIO_NO_EXISTE'
+      }, { status: 400 });
+    }
+
+    if (!(usuario as any).activo || (usuario as any).activo === 0) {
+      return NextResponse.json({ 
+        error: 'No se pueden inscribir alumnos desactivados a clases',
+        code: 'USUARIO_DESACTIVADO'
+      }, { status: 400 });
     }
 
     // Verificar si el usuario ya está inscrito en esta clase
