@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Navbar from '@/components/Navbar';
 import TableScrollContainer from '@/components/TableScrollContainer';
@@ -30,7 +30,7 @@ interface Reserva {
   clase_nombre: string;
 }
 
-export default function UsuariosPage() {
+function UsuariosPageContent() {
   const searchParams = useSearchParams();
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
   const [clases, setClases] = useState<Clase[]>([]);
@@ -763,5 +763,22 @@ export default function UsuariosPage() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function UsuariosPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gray-50 overflow-x-hidden">
+        <Navbar />
+        <div className="max-w-7xl mx-auto px-2 sm:px-4 lg:px-8 py-4 sm:py-6 lg:py-8">
+          <div className="text-center py-12">
+            <p className="text-gray-600">Cargando...</p>
+          </div>
+        </div>
+      </div>
+    }>
+      <UsuariosPageContent />
+    </Suspense>
   );
 }
