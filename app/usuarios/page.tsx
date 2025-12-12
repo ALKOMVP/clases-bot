@@ -69,23 +69,7 @@ function UsuariosPageContent() {
     const initData = async () => {
       await loadClases();
       await loadReservas();
-      const usuariosData = await loadUsuarios();
-      
-      // Si no hay usuarios, generar automáticamente 50 alumnos de prueba
-      if (Array.isArray(usuariosData) && usuariosData.length === 0) {
-        try {
-          const res = await fetch('/api/test-users', { method: 'POST' });
-          const data = await res.json();
-          if (res.ok) {
-            console.log('Usuarios de prueba generados automáticamente:', data.message);
-            await loadUsuarios();
-          } else {
-            console.error('Error generando usuarios de prueba:', data.error);
-          }
-        } catch (error: any) {
-          console.error('Error generando usuarios de prueba:', error);
-        }
-      }
+      await loadUsuarios();
     };
     initData();
   }, []);
