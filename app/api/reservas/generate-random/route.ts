@@ -42,29 +42,18 @@ export async function POST(request: NextRequest) {
       }, { status: 400 });
     }
 
-    // Obtener reservas existentes para evitar duplicados y calcular cupos
+    // Obtener reservas existentes para evitar duplicados
     const reservasResult = await db.prepare('SELECT usuario_id, clase_id FROM reserva').all();
     const reservasExistentes = new Set(
       (reservasResult?.results || []).map((r: any) => `${r.usuario_id}-${r.clase_id}`)
     );
 
-    // Calcular cupos por clase (máximo 35 alumnos por clase)
-    const MAX_CUPO = 35;
-    const cuposPorClase = new Map<number, number>();
-    for (const clase of clases) {
-      const countResult = await db.prepare(
-        'SELECT COUNT(*) as count FROM reserva WHERE clase_id = ?'
-      ).bind(clase.id).first();
-      const currentCount = (countResult as any)?.count || 0;
-      cuposPorClase.set(clase.id, currentCount);
-    }
-
     let reservasCreadas = 0;
     const maxReservas = Math.min(200, usuarios.length * 5); // Máximo 200 reservas o 5 por usuario
 
-    // Generar reservas aleatorias respetando el cupo máximo
+    // Generar reservas aleatorias sin límite de cupo
     let intentos = 0;
-    const maxIntentos = maxReservas * 5; // Intentar más veces para encontrar clases disponibles
+    const maxIntentos = maxReservas * 5; // Intentar más veces para encontrar combinaciones disponibles
     
     while (reservasCreadas < maxReservas && intentos < maxIntentos) {
       intentos++;
@@ -72,17 +61,14 @@ export async function POST(request: NextRequest) {
       const clase = getRandomElement(clases);
       const key = `${usuario.id}-${clase.id}`;
       
-      // Verificar que no exista la reserva y que la clase tenga cupo disponible
-      const cupoActual = cuposPorClase.get(clase.id) || 0;
-      
-      if (!reservasExistentes.has(key) && cupoActual < MAX_CUPO) {
+      // Verificar que no exista la reserva
+      if (!reservasExistentes.has(key)) {
         try {
           await db.prepare(
             'INSERT INTO reserva (usuario_id, clase_id, created_at) VALUES (?, ?, ?)'
           ).bind(usuario.id, clase.id, new Date().toISOString()).run();
           
           reservasExistentes.add(key);
-          cuposPorClase.set(clase.id, cupoActual + 1);
           reservasCreadas++;
         } catch (error: any) {
           // Ignorar errores de duplicados

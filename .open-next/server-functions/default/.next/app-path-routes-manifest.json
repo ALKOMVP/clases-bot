@@ -1,0 +1,21 @@
+{
+  "/_not-found/page": "/_not-found",
+  "/api/reservas/cleanup-desactivados/route": "/api/reservas/cleanup-desactivados",
+  "/api/reservas/generate-random/route": "/api/reservas/generate-random",
+  "/api/test-users/route": "/api/test-users",
+  "/api/usuarios/activate-all/route": "/api/usuarios/activate-all",
+  "/api/auth/logout/route": "/api/auth/logout",
+  "/api/auth/login/route": "/api/auth/login",
+  "/api/test-post/route": "/api/test-post",
+  "/api/test/route": "/api/test",
+  "/api/export/route": "/api/export",
+  "/api/reservas/route": "/api/reservas",
+  "/api/usuarios/route": "/api/usuarios",
+  "/api/clases/route": "/api/clases",
+  "/clases/page": "/clases",
+  "/login/page": "/login",
+  "/calendario/page": "/calendario",
+  "/page": "/",
+  "/usuarios/page": "/usuarios",
+  "/reservas/page": "/reservas"
+}

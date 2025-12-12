@@ -162,23 +162,6 @@ export async function POST(request: NextRequest) {
       }, { status: 400 });
     }
 
-    // Verificar el cupo máximo (35 alumnos por clase)
-    const MAX_CUPO = 35;
-    const reservasCount = await db.prepare(
-      'SELECT COUNT(*) as count FROM reserva WHERE clase_id = ?'
-    ).bind(clase_id).first();
-
-    const currentCount = (reservasCount as any)?.count || 0;
-    
-    if (currentCount >= MAX_CUPO) {
-      return NextResponse.json({ 
-        error: `Esta clase ya tiene el cupo completo (${MAX_CUPO} alumnos). No se pueden inscribir más alumnos.`,
-        code: 'CUPO_COMPLETO',
-        cupoMaximo: MAX_CUPO,
-        cupoActual: currentCount
-      }, { status: 400 });
-    }
-
     await db.prepare(
       'INSERT INTO reserva (usuario_id, clase_id) VALUES (?, ?)'
     ).bind(usuario_id, clase_id).run();
