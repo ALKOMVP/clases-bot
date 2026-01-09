@@ -44,7 +44,10 @@ function getMockData() {
       (globalThis as any).__mockDBData = {
         usuarios: [],
         clases: [],
-        reservas: []
+        reservas: [],
+        cancelaciones: [],
+        lista_espera: [],
+        clase_recuperar: []
       };
     }
     mockData = (globalThis as any).__mockDBData;
@@ -53,7 +56,10 @@ function getMockData() {
       (global as any).__mockDBData = {
         usuarios: [],
         clases: [],
-        reservas: []
+        reservas: [],
+        cancelaciones: [],
+        lista_espera: [],
+        clase_recuperar: []
       };
     }
     mockData = (global as any).__mockDBData;
@@ -396,6 +402,45 @@ class MockDB {
               
               return { results };
             }
+            // Clase recuperar
+            if (query.includes('FROM clase_recuperar')) {
+              let results = [...mockData.clase_recuperar];
+              
+              // Aplicar filtros WHERE
+              if (query.includes('WHERE') && params.length > 0) {
+                if (query.includes('usuario_id = ?')) {
+                  const usuarioIdIndex = query.indexOf('usuario_id = ?');
+                  if (usuarioIdIndex !== -1) {
+                    const beforeUsuarioId = query.substring(0, usuarioIdIndex);
+                    const paramIndex = (beforeUsuarioId.match(/\?/g) || []).length;
+                    if (params[paramIndex] !== undefined) {
+                      results = results.filter((r: any) => Number(r.usuario_id) === Number(params[paramIndex]));
+                    }
+                  }
+                }
+                if (query.includes('usado = ?')) {
+                  const usadoIndex = query.indexOf('usado = ?');
+                  if (usadoIndex !== -1) {
+                    const beforeUsado = query.substring(0, usadoIndex);
+                    const paramIndex = (beforeUsado.match(/\?/g) || []).length;
+                    if (params[paramIndex] !== undefined) {
+                      results = results.filter((r: any) => Number(r.usado) === Number(params[paramIndex]));
+                    }
+                  }
+                }
+                if (query.includes('fecha_vencimiento >= date(\'now\')') || query.includes('fecha_vencimiento >=')) {
+                  const hoy = new Date().toISOString().split('T')[0];
+                  results = results.filter((r: any) => r.fecha_vencimiento >= hoy);
+                }
+              }
+              
+              // Manejar COUNT(*)
+              if (query.includes('COUNT(*)')) {
+                return { results: [{ total: results.length }] };
+              }
+              
+              return { results };
+            }
             return { results: [] };
           },
           run: async () => {
@@ -481,6 +526,35 @@ class MockDB {
               } else {
                 throw new Error('UNIQUE constraint failed: clase.dia, clase.hora');
               }
+            }
+            if (query.includes('INSERT INTO clase_recuperar')) {
+              // INSERT INTO clase_recuperar (usuario_id, fecha_creacion, fecha_vencimiento, clase_id, fecha_clase_cancelada, usado)
+              // VALUES (?, ?, ?, ?, ?, 0)
+              const maxId = mockData.clase_recuperar.length > 0 
+                ? Math.max(...mockData.clase_recuperar.map((c: any) => (c.id || 0)))
+                : 0;
+              
+              const claseRecuperar: any = {
+                id: maxId + 1,
+                usuario_id: Number(params[0]),
+                fecha_creacion: String(params[1]),
+                fecha_vencimiento: String(params[2]),
+                clase_id: params[3] !== undefined && params[3] !== null ? Number(params[3]) : null,
+                fecha_clase_cancelada: params[4] !== undefined && params[4] !== null ? String(params[4]) : null,
+                usado: params[5] !== undefined ? Number(params[5]) : 0,
+                fecha_uso: null,
+                created_at: new Date().toISOString()
+              };
+              
+              mockData.clase_recuperar.push(claseRecuperar);
+              
+              return {
+                success: true,
+                meta: {
+                  last_row_id: claseRecuperar.id,
+                  changes: 1
+                }
+              };
             }
             if (query.includes('INSERT INTO reserva')) {
               // Detectar qué campos vienen en el INSERT

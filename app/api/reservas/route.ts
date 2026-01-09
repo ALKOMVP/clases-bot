@@ -4,6 +4,135 @@ import { createErrorResponse, checkDatabaseAvailability, getEnvironmentInfo } fr
 
 // OpenNext no requiere runtime = 'edge' explícito
 
+/**
+ * Función auxiliar para promover el siguiente usuario de la lista de espera a reserva temporal confirmada
+ * cuando hay cupo disponible para una fecha específica
+ */
+async function promoverDeListaEspera(db: any, claseIdNum: number, fechaClase: string): Promise<void> {
+  try {
+    // Verificar cupo actual para esta fecha
+    const reservasFijasQuery = await db.prepare(`
+      SELECT COUNT(DISTINCT r.usuario_id) as count
+      FROM reserva r
+      WHERE r.clase_id = ? 
+        AND (r.fecha_clase IS NULL OR r.fecha_clase = 'null' OR r.fecha_clase = '')
+        AND (r.es_reasignacion IS NULL OR r.es_reasignacion = 0)
+        AND NOT EXISTS (
+          SELECT 1 FROM cancelacion c
+          WHERE c.usuario_id = r.usuario_id 
+            AND c.clase_id = r.clase_id 
+            AND c.fecha_clase = ?
+        )
+    `).bind(claseIdNum, fechaClase).first();
+    
+    const countFijas = (reservasFijasQuery as any)?.count || 0;
+
+    const reservasTemporales = await db.prepare(`
+      SELECT COUNT(DISTINCT usuario_id) as count
+      FROM reserva
+      WHERE clase_id = ? AND fecha_clase = ? AND es_reasignacion = 1
+    `).bind(claseIdNum, fechaClase).first();
+    
+    const countTemporales = (reservasTemporales as any)?.count || 0;
+
+    const cupoMaximo = 35;
+    const totalConfirmados = countFijas + countTemporales;
+    const cupoDisponible = cupoMaximo - totalConfirmados;
+
+    console.log(`[promoverDeListaEspera] Cupo para fecha ${fechaClase}:`, { 
+      countFijas, 
+      countTemporales, 
+      totalConfirmados, 
+      cupoDisponible,
+      cupoMaximo 
+    });
+
+    // Si hay cupo disponible, promover al primero en lista de espera
+    if (cupoDisponible > 0) {
+      // Obtener el primero en lista de espera
+      let primeroEnLista = await db.prepare(`
+        SELECT * FROM lista_espera
+        WHERE clase_id = ? AND fecha_clase = ?
+        ORDER BY numero ASC
+        LIMIT 1
+      `).bind(claseIdNum, fechaClase).first();
+
+      if (primeroEnLista) {
+        const siguienteUsuarioId = (primeroEnLista as any).usuario_id;
+        const numeroEnLista = (primeroEnLista as any).numero;
+        
+        console.log(`[promoverDeListaEspera] ✅ Usuario encontrado en lista de espera para ${fechaClase}:`, { 
+          usuario_id: siguienteUsuarioId,
+          numero_en_lista: numeroEnLista,
+          cupo_disponible: cupoDisponible
+        });
+
+        // Verificar que el usuario no tenga ya una reserva temporal para esta fecha
+        const reservaExistente = await db.prepare(`
+          SELECT * FROM reserva 
+          WHERE usuario_id = ? AND clase_id = ? AND fecha_clase = ?
+        `).bind(siguienteUsuarioId, claseIdNum, fechaClase).first();
+
+        if (!reservaExistente) {
+          // Crear reserva temporal para el usuario promovido
+          const insertResult = await db.prepare(`
+            INSERT INTO reserva (usuario_id, clase_id, fecha_clase, es_reasignacion, created_at)
+            VALUES (?, ?, ?, 1, datetime('now'))
+          `).bind(siguienteUsuarioId, claseIdNum, fechaClase).run();
+
+          console.log(`[promoverDeListaEspera] ✅ Reserva temporal creada para ${fechaClase}`, {
+            usuario_id: siguienteUsuarioId,
+            clase_id: claseIdNum,
+            fecha_clase: fechaClase
+          });
+
+          // Eliminar de lista de espera
+          await db.prepare(`
+            DELETE FROM lista_espera
+            WHERE usuario_id = ? AND clase_id = ? AND fecha_clase = ?
+          `).bind(siguienteUsuarioId, claseIdNum, fechaClase).run();
+
+          // Reordenar números de lista de espera (renumerar desde 1)
+          const listaRestante = await db.prepare(`
+            SELECT * FROM lista_espera
+            WHERE clase_id = ? AND fecha_clase = ?
+            ORDER BY numero ASC
+          `).bind(claseIdNum, fechaClase).all();
+
+          const items = (listaRestante.results || []) as any[];
+          
+          for (let i = 0; i < items.length; i++) {
+            await db.prepare(`
+              UPDATE lista_espera
+              SET numero = ?
+              WHERE usuario_id = ? AND clase_id = ? AND fecha_clase = ?
+            `).bind(i + 1, items[i].usuario_id, claseIdNum, fechaClase).run();
+          }
+
+          console.log(`[promoverDeListaEspera] ✅ Usuario promovido exitosamente para ${fechaClase}`, {
+            usuario_id: siguienteUsuarioId,
+            usuarios_restantes_en_lista: items.length
+          });
+        } else {
+          console.log(`[promoverDeListaEspera] ⚠️ Usuario ya tiene reserva para ${fechaClase}, eliminando de lista de espera...`);
+          // Si ya tiene reserva, solo eliminarlo de la lista de espera
+          await db.prepare(`
+            DELETE FROM lista_espera
+            WHERE usuario_id = ? AND clase_id = ? AND fecha_clase = ?
+          `).bind(siguienteUsuarioId, claseIdNum, fechaClase).run();
+        }
+      } else {
+        console.log(`[promoverDeListaEspera] No hay usuarios en lista de espera para ${fechaClase}`);
+      }
+    } else {
+      console.log(`[promoverDeListaEspera] No hay cupo disponible para ${fechaClase} (${totalConfirmados}/${cupoMaximo})`);
+    }
+  } catch (error: any) {
+    console.error(`[promoverDeListaEspera] Error procesando fecha ${fechaClase}:`, error.message);
+    throw error;
+  }
+}
+
 export async function GET(request: NextRequest) {
   const envInfo = getEnvironmentInfo();
   console.log('[GET /api/reservas] Starting request', { environment: envInfo.environment });
@@ -383,14 +512,67 @@ export async function DELETE(request: NextRequest) {
       fechaClaseParaLista = fecha_clase;
     } else {
       // Eliminar reserva fija completamente (sin fecha_clase)
-      await db.prepare(`
+      console.log('[DELETE /api/reservas] 🔍 Eliminando reserva fija permanente, claseIdNum:', claseIdNum, 'tipo:', typeof claseIdNum);
+      
+      const deleteResult = await db.prepare(`
         DELETE FROM reserva 
         WHERE usuario_id = ? AND clase_id = ? 
           AND (fecha_clase IS NULL OR fecha_clase = 'null' OR fecha_clase = '')
           AND (es_reasignacion IS NULL OR es_reasignacion = 0)
       `).bind(usuario_id, clase_id).run();
-      // Para reservas fijas eliminadas completamente, no podemos promover automáticamente
-      // porque afecta todas las fechas, no una fecha específica
+      
+      console.log('[DELETE /api/reservas] ✅ Reserva fija eliminada, cambios:', (deleteResult as any)?.meta?.changes || 0);
+      
+      // Obtener información de la clase para calcular fechas futuras
+      console.log('[DELETE /api/reservas] 🔍 Buscando información de clase con ID:', claseIdNum);
+      const claseInfo = await db.prepare('SELECT dia, hora, nombre FROM clase WHERE id = ?').bind(claseIdNum).first();
+      console.log('[DELETE /api/reservas] 🔍 Resultado de búsqueda de clase:', claseInfo ? 'ENCONTRADA' : 'NO ENCONTRADA', claseInfo);
+      
+      if (claseInfo) {
+        const diaClase = (claseInfo as any).dia;
+        console.log('[DELETE /api/reservas] 🔄 Reserva fija eliminada, procesando todas las fechas futuras para clase:', {
+          clase_id: claseIdNum,
+          dia: diaClase,
+          hora: (claseInfo as any).hora
+        });
+        
+        // Generar todas las fechas futuras para este día de la semana (próximos 30 días)
+        const fechasFuturas: string[] = [];
+        const hoy = new Date();
+        hoy.setHours(0, 0, 0, 0);
+        
+        // Mapeo de días
+        const diasMap: { [key: string]: number } = { 'Lun': 1, 'Mar': 2, 'Jue': 4, 'Sab': 6 };
+        const targetDay = diasMap[diaClase];
+        
+        if (targetDay !== undefined) {
+          for (let i = 0; i < 30; i++) {
+            const fecha = new Date(hoy);
+            fecha.setDate(hoy.getDate() + i);
+            
+            // Si el día de la semana coincide con el día de la clase
+            if (fecha.getDay() === targetDay) {
+              const fechaStr = fecha.toISOString().split('T')[0];
+              fechasFuturas.push(fechaStr);
+            }
+          }
+        }
+        
+        console.log('[DELETE /api/reservas] 📅 Fechas futuras generadas:', fechasFuturas.length, fechasFuturas);
+        
+        // Procesar cada fecha futura para promover de lista de espera
+        for (const fechaFutura of fechasFuturas) {
+          try {
+            await promoverDeListaEspera(db, claseIdNum, fechaFutura);
+          } catch (error: any) {
+            console.error(`[DELETE /api/reservas] Error procesando fecha ${fechaFutura}:`, error.message);
+            // Continuar con la siguiente fecha aunque haya error
+          }
+        }
+      } else {
+        console.warn('[DELETE /api/reservas] ⚠️ No se encontró información de la clase:', claseIdNum);
+      }
+      
       fechaClaseParaLista = null;
     }
 
@@ -400,223 +582,16 @@ export async function DELETE(request: NextRequest) {
     // y promover al siguiente en lista de espera
     if (fechaClaseParaLista) {
       try {
-        // Verificar cupo actual después de la eliminación/cancelación
-        // Contar reservas fijas que NO tienen cancelación para esta fecha específica
-        const reservasFijasQuery = await db.prepare(`
-          SELECT COUNT(DISTINCT r.usuario_id) as count
-          FROM reserva r
-          WHERE r.clase_id = ? 
-            AND (r.fecha_clase IS NULL OR r.fecha_clase = 'null' OR r.fecha_clase = '')
-            AND (r.es_reasignacion IS NULL OR r.es_reasignacion = 0)
-            AND NOT EXISTS (
-              SELECT 1 FROM cancelacion c
-              WHERE c.usuario_id = r.usuario_id 
-                AND c.clase_id = r.clase_id 
-                AND c.fecha_clase = ?
-            )
-        `).bind(claseIdNum, fechaClaseParaLista).first();
-        
-        const countFijas = (reservasFijasQuery as any)?.count || 0;
-
-        const reservasTemporales = await db.prepare(`
-          SELECT COUNT(DISTINCT usuario_id) as count
-          FROM reserva
-          WHERE clase_id = ? AND fecha_clase = ? AND es_reasignacion = 1
-        `).bind(claseIdNum, fechaClaseParaLista).first();
-        
-        const countTemporales = (reservasTemporales as any)?.count || 0;
-
-        const cupoMaximo = 35;
-        const totalConfirmados = countFijas + countTemporales;
-        const cupoDisponible = cupoMaximo - totalConfirmados;
-
-        console.log('[DELETE /api/reservas] Cupo después de eliminación', { 
-          countFijas, 
-          countTemporales, 
-          totalConfirmados, 
-          cupoDisponible,
-          cupoMaximo 
-        });
-
-        // Si hay cupo disponible, promover al primero en lista de espera
-        if (cupoDisponible > 0) {
-          console.log('[DELETE /api/reservas] ✅ Hay cupo disponible, buscando primer usuario en lista de espera...');
-          console.log('[DELETE /api/reservas] Parámetros de búsqueda:', {
-            claseIdNum,
-            tipo_claseIdNum: typeof claseIdNum,
-            fechaClaseParaLista,
-            tipo_fechaClase: typeof fechaClaseParaLista
-          });
-          
-          // Obtener el primero en lista de espera (numero = 1 o el menor número disponible)
-          // Intentar con número primero
-          let primeroEnLista = await db.prepare(`
-            SELECT * FROM lista_espera
-            WHERE clase_id = ? AND fecha_clase = ?
-            ORDER BY numero ASC
-            LIMIT 1
-          `).bind(claseIdNum, fechaClaseParaLista).first();
-
-          // Si no se encuentra, intentar con string
-          if (!primeroEnLista) {
-            console.log('[DELETE /api/reservas] No encontrado con número, intentando con string...');
-            primeroEnLista = await db.prepare(`
-              SELECT * FROM lista_espera
-              WHERE clase_id = ? AND fecha_clase = ?
-              ORDER BY numero ASC
-              LIMIT 1
-            `).bind(clase_id, fechaClaseParaLista).first();
-          }
-
-          console.log('[DELETE /api/reservas] Resultado de búsqueda en lista_espera:', primeroEnLista ? 'ENCONTRADO' : 'NO ENCONTRADO', primeroEnLista);
-
-          if (primeroEnLista) {
-            const siguienteUsuarioId = (primeroEnLista as any).usuario_id;
-            const numeroEnLista = (primeroEnLista as any).numero;
-            console.log('[DELETE /api/reservas] ✅ Usuario encontrado en lista de espera', { 
-              usuario_id: siguienteUsuarioId,
-              tipo_usuario_id: typeof siguienteUsuarioId,
-              clase_id: claseIdNum, 
-              tipo_clase_id: typeof claseIdNum,
-              fecha_clase: fechaClaseParaLista,
-              numero_en_lista: numeroEnLista,
-              cupo_disponible: cupoDisponible
-            });
-
-            // Verificar que el usuario no tenga ya una reserva temporal para esta fecha
-            const reservaExistente = await db.prepare(`
-              SELECT * FROM reserva 
-              WHERE usuario_id = ? AND clase_id = ? AND fecha_clase = ?
-            `).bind(siguienteUsuarioId, claseIdNum, fechaClaseParaLista).first();
-
-            console.log('[DELETE /api/reservas] Verificando si usuario ya tiene reserva:', reservaExistente ? 'SÍ tiene reserva' : 'NO tiene reserva');
-
-            if (!reservaExistente) {
-              console.log('[DELETE /api/reservas] 🎯 Creando reserva temporal para usuario promovido...');
-              console.log('[DELETE /api/reservas] Valores para INSERT:', {
-                usuario_id: siguienteUsuarioId,
-                tipo_usuario_id: typeof siguienteUsuarioId,
-                clase_id: claseIdNum,
-                tipo_clase_id: typeof claseIdNum,
-                fecha_clase: fechaClaseParaLista,
-                tipo_fecha_clase: typeof fechaClaseParaLista
-              });
-              
-              // Crear reserva temporal para el usuario promovido
-              try {
-                const insertResult = await db.prepare(`
-                  INSERT INTO reserva (usuario_id, clase_id, fecha_clase, es_reasignacion, created_at)
-                  VALUES (?, ?, ?, 1, datetime('now'))
-                `).bind(siguienteUsuarioId, claseIdNum, fechaClaseParaLista).run();
-
-                console.log('[DELETE /api/reservas] ✅ Reserva temporal creada exitosamente', {
-                  usuario_id: siguienteUsuarioId,
-                  clase_id: claseIdNum,
-                  fecha_clase: fechaClaseParaLista,
-                  insertChanges: (insertResult as any)?.meta?.changes || 0,
-                  lastRowId: (insertResult as any)?.meta?.last_row_id
-                });
-
-                // Verificar que la reserva se creó correctamente
-                const reservaVerificada = await db.prepare(`
-                  SELECT * FROM reserva 
-                  WHERE usuario_id = ? AND clase_id = ? AND fecha_clase = ? AND es_reasignacion = 1
-                `).bind(siguienteUsuarioId, claseIdNum, fechaClaseParaLista).first();
-
-                if (reservaVerificada) {
-                  console.log('[DELETE /api/reservas] ✅ Verificación: Reserva temporal existe en BD');
-                } else {
-                  console.error('[DELETE /api/reservas] ❌ ERROR: Reserva temporal NO se creó correctamente');
-                }
-
-                // Eliminar de lista de espera
-                const deleteResult = await db.prepare(`
-                  DELETE FROM lista_espera
-                  WHERE usuario_id = ? AND clase_id = ? AND fecha_clase = ?
-                `).bind(siguienteUsuarioId, claseIdNum, fechaClaseParaLista).run();
-
-                console.log('[DELETE /api/reservas] ✅ Eliminado de lista de espera', {
-                  deleteChanges: (deleteResult as any)?.meta?.changes || 0
-                });
-
-                // Verificar que se eliminó de lista de espera
-                const enListaVerificada = await db.prepare(`
-                  SELECT * FROM lista_espera
-                  WHERE usuario_id = ? AND clase_id = ? AND fecha_clase = ?
-                `).bind(siguienteUsuarioId, claseIdNum, fechaClaseParaLista).first();
-
-                if (!enListaVerificada) {
-                  console.log('[DELETE /api/reservas] ✅ Verificación: Usuario eliminado correctamente de lista_espera');
-                } else {
-                  console.error('[DELETE /api/reservas] ❌ ERROR: Usuario todavía está en lista_espera');
-                }
-
-                // Reordenar números de lista de espera (renumerar desde 1)
-                const listaRestante = await db.prepare(`
-                  SELECT * FROM lista_espera
-                  WHERE clase_id = ? AND fecha_clase = ?
-                  ORDER BY numero ASC
-                `).bind(claseIdNum, fechaClaseParaLista).all();
-
-                const items = (listaRestante.results || []) as any[];
-                console.log('[DELETE /api/reservas] Reordenando', items.length, 'usuarios restantes en lista de espera...');
-                
-                for (let i = 0; i < items.length; i++) {
-                  await db.prepare(`
-                    UPDATE lista_espera
-                    SET numero = ?
-                    WHERE usuario_id = ? AND clase_id = ? AND fecha_clase = ?
-                  `).bind(i + 1, items[i].usuario_id, claseIdNum, fechaClaseParaLista).run();
-                }
-
-                console.log('[DELETE /api/reservas] ✅ Usuario promovido exitosamente de lista de espera a temporal confirmado', {
-                  usuario_id: siguienteUsuarioId,
-                  usuarios_restantes_en_lista: items.length,
-                  cupo_disponible_antes: cupoDisponible,
-                  cupo_disponible_despues: cupoDisponible - 1
-                });
-              } catch (insertError: any) {
-                console.error('[DELETE /api/reservas] ❌ ERROR al crear reserva temporal:', insertError.message);
-                console.error('[DELETE /api/reservas] Stack:', insertError.stack);
-                throw insertError;
-              }
-
-            } else {
-              console.log('[DELETE /api/reservas] ⚠️ El usuario en lista de espera ya tiene reserva, eliminando de lista de espera');
-              // Si ya tiene reserva, solo eliminar de lista de espera
-              await db.prepare(`
-                DELETE FROM lista_espera
-                WHERE usuario_id = ? AND clase_id = ? AND fecha_clase = ?
-              `).bind(siguienteUsuarioId, claseIdNum, fechaClaseParaLista).run();
-
-              // Reordenar números
-              const listaRestante = await db.prepare(`
-                SELECT * FROM lista_espera
-                WHERE clase_id = ? AND fecha_clase = ?
-                ORDER BY numero ASC
-              `).bind(claseIdNum, fechaClaseParaLista).all();
-
-              const items = (listaRestante.results || []) as any[];
-              for (let i = 0; i < items.length; i++) {
-                await db.prepare(`
-                  UPDATE lista_espera
-                  SET numero = ?
-                  WHERE usuario_id = ? AND clase_id = ? AND fecha_clase = ?
-                `).bind(i + 1, items[i].usuario_id, claseIdNum, fechaClaseParaLista).run();
-              }
-            }
-          } else {
-            console.log('[DELETE /api/reservas] ℹ️ No hay nadie en lista de espera para esta clase y fecha');
-          }
-        } else {
-          console.log('[DELETE /api/reservas] ⚠️ No hay cupo disponible después de eliminar (total:', totalConfirmados, '>=', cupoMaximo, '), no se puede promover');
-        }
-      } catch (error: any) {
-        // Si hay error con lista de espera, solo loguear pero no fallar la eliminación
-        console.error('[DELETE /api/reservas] Error al procesar lista de espera después de eliminar reserva:', error.message);
+        await promoverDeListaEspera(db, claseIdNum, fechaClaseParaLista);
+      } catch (promocionError: any) {
+        console.error('[DELETE /api/reservas] Error al promover de lista de espera:', promocionError.message);
+        // No lanzar el error, solo loguearlo para que la eliminación se complete
       }
     }
 
+    // Código duplicado eliminado - ahora se usa la función promoverDeListaEspera()
+
+    // Respuesta con información sobre si se promovió alguien
     // Respuesta con información sobre si se promovió alguien
     const respuesta: any = { success: true };
     

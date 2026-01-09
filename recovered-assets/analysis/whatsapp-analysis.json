@@ -1,0 +1,19 @@
+{
+  "patterns": {
+    "webhook": 1,
+    "cancelar": 1,
+    "agendar": 0,
+    "verClases": 0,
+    "apiRoute": 0,
+    "POST": 1,
+    "GET": 1
+  },
+  "functionsFound": 2,
+  "contextLines": 1,
+  "sampleContext": [
+    {
+      "line": 1,
+      "context": "(self.webpackChunk_N_E=self.webpackChunk_N_E||[]).push([[964],{89:(e,t,r)=>{\"use strict\";Object.defineProperty(t,\"__esModule\",{value:!0}),Object.defineProperty(t,\"useRouterBFCache\",{enumerable:!0,get:function(){return u}});let n=r(2115);function u(e,t){let[r,u]=(0,n.useState)(()=>({tree:e,stateKey:t,next:null}));if(r.tree===e)return r;let l={tree:e,stateKey:t,next:null},o=1,a=r,i=l;for(;null!==a&&o<1;){if(a.stateKey===t){i.next=a.next;break}{o++;let e={tree:a.tree,stateKey:a.stateKey,next:null};"
+    }
+  ]
+}

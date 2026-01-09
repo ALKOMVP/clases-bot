@@ -1,0 +1,5 @@
+      "WHATSAPP_TEMPLATE_NAME": {
+      "WHATSAPP_TOKEN": {
+      "/_next/static/chunks/app/api/whatsapp/webhook/route-99ba056e5fe1f9ab.js": "cdc86726ba9e8b84d3ec9095818ce33d",
+      "/server-functions/default/.next/server/app/api/whatsapp/webhook/route.js": "437d09ac404c313ecc9438485b438538",
+      "/server-functions/default/.next/server/app/api/whatsapp/webhook/route_client-reference-manifest.js": "4ce9a806b457fc018a265843f75619fd",
