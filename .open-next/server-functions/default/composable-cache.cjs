@@ -1,4 +1,4 @@
-globalThis.disableIncrementalCache = false;globalThis.disableDynamoDBCache = false;globalThis.isNextAfter15 = true;globalThis.openNextDebug = false;globalThis.openNextVersion = "3.9.6";
+globalThis.disableIncrementalCache = false;globalThis.disableDynamoDBCache = false;globalThis.isNextAfter15 = true;globalThis.openNextDebug = false;globalThis.openNextVersion = "3.9.7";
 var __defProp = Object.defineProperty;
 var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
 var __getOwnPropNames = Object.getOwnPropertyNames;
@@ -154,12 +154,20 @@ var composable_cache_default = {
   async refreshTags() {
     return;
   },
+  /**
+   * The signature has changed in Next.js 16
+   * - Before Next.js 16, the method takes `...tags: string[]`
+   * - From Next.js 16, the method takes `tags: string[]`
+   */
   async getExpiration(...tags) {
     if (globalThis.tagCache.mode === "nextMode") {
-      return globalThis.tagCache.getLastRevalidated(tags);
+      return globalThis.tagCache.getLastRevalidated(tags.flat());
     }
     return 0;
   },
+  /**
+   * This method is only used before Next.js 16
+   */
   async expireTags(...tags) {
     if (globalThis.tagCache.mode === "nextMode") {
       return writeTags(tags);

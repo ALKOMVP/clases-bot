@@ -31,10 +31,17 @@ export async function GET(request: NextRequest) {
     // En OpenNext, los bindings están disponibles a través del contexto de Cloudflare
     let db: any = null;
     
+    // Primero intentar desde el contexto de Cloudflare (AsyncLocalStorage)
     const cloudflareContext = (globalThis as any)[Symbol.for('__cloudflare-context__')];
     if (cloudflareContext?.env?.DB) {
       db = cloudflareContext.env.DB;
       console.log('[GET /api/clases] DB obtained from Cloudflare context (OpenNext)');
+    }
+    
+    // Si no está disponible en el contexto, intentar desde process.env (OpenNext lo popula)
+    if (!db && typeof process !== 'undefined' && (process.env as any).DB) {
+      db = (process.env as any).DB;
+      console.log('[GET /api/clases] DB obtained from process.env.DB (OpenNext fallback)');
     }
     
     if (!db) {
@@ -48,7 +55,13 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Base de datos no disponible' }, { status: 503 });
     }
 
+    console.log('[GET /api/clases] Ejecutando query para obtener clases...');
     const result = await db.prepare('SELECT * FROM clase ORDER BY dia, hora').all();
+    console.log('[GET /api/clases] Query ejecutada, resultado:', { 
+      hasResults: !!result, 
+      resultsLength: result?.results?.length || 0,
+      resultKeys: result ? Object.keys(result) : []
+    });
     let clases = (result?.results || []) as any[];
     
     // Si no hay clases, inicializarlas automáticamente

@@ -18,6 +18,12 @@ export async function GET(request: NextRequest) {
       console.log('[GET /api/export] DB obtained from Cloudflare context (OpenNext)');
     }
     
+    // Si no está disponible en el contexto, intentar desde process.env (OpenNext lo popula)
+    if (!db && typeof process !== 'undefined' && (process.env as any).DB) {
+      db = (process.env as any).DB;
+      console.log('[GET /api/export] DB obtained from process.env.DB (OpenNext fallback)');
+    }
+    
     if (!db) {
       // Si no hay DB disponible, usar mock como fallback
       db = getMockDBInstance();

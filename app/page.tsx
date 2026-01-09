@@ -53,7 +53,7 @@ export default function HomePage() {
         const desactivados = Array.isArray(usuarios) 
           ? usuarios.filter((u: any) => {
               const activo = u.activo;
-              return activo === false || activo === 0 || activo === '0' || activo === null || activo === undefined;
+              return activo === false || activo === 0 || activo === '0' || activo == null;
             }).slice(0, 5)
           : [];
         setAlumnosDesactivados(desactivados);

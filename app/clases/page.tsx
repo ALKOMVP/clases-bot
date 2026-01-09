@@ -36,11 +36,7 @@ export default function ClasesPage() {
         operation: 'load_clases'
       });
       const data = await res.json();
-      if (Array.isArray(data)) {
-        setClases(data);
-      } else {
-        setClases([]);
-      }
+      Array.isArray(data) ? setClases(data) : setClases([]);
     } catch (error: any) {
       console.error('Error loading clases:', error);
       alert(error.message || 'Error al cargar clases');

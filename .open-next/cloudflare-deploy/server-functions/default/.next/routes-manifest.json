@@ -39,6 +39,12 @@
       "namedRegex": "^/calendario(?:/)?$"
     },
     {
+      "page": "/cancelaciones",
+      "regex": "^/cancelaciones(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/cancelaciones(?:/)?$"
+    },
+    {
       "page": "/clases",
       "regex": "^/clases(?:/)?$",
       "routeKeys": {},

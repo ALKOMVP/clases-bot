@@ -12,10 +12,15 @@
     "lint": "next lint",
     "db:migrate": "wrangler d1 migrations apply clases-db --local",
     "db:migrate:remote": "wrangler d1 migrations apply clases-db --remote",
+    "db:sync": "./scripts/sync-db-structure.sh",
+    "db:sync:from-prod": "./scripts/sync-db-from-prod.sh",
+    "db:ensure-data": "./scripts/ensure-db-has-data.sh",
     "db:backup": "./scripts/backup-db.sh",
     "db:backup:email": "./scripts/backup-db.sh --send-email",
     "db:backup:now": "./scripts/backup-and-email.sh",
-    "dev:cloudflare": "next dev"
+    "dev:cloudflare": "npm run build:cloudflare && npm run prepare:cloudflare-deploy && ./scripts/ensure-db-has-data.sh && wrangler pages dev .open-next/cloudflare-deploy --local --d1=DB=clases-db --port 8788",
+    "dev:init": "./scripts/sync-db-from-prod.sh && npm run dev:cloudflare",
+    "dev:local": "npm run build:cloudflare && npm run prepare:cloudflare-deploy && wrangler pages dev .open-next/cloudflare-deploy --local --d1=DB=clases-db"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

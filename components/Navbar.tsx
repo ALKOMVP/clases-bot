@@ -29,6 +29,9 @@ export default function Navbar() {
             <Link href="/calendario" className="hover:text-purple-200 transition-colors text-sm sm:text-base whitespace-nowrap">
               Calendario
             </Link>
+            <Link href="/cancelaciones" className="hover:text-purple-200 transition-colors text-sm sm:text-base whitespace-nowrap">
+              Cancelaciones
+            </Link>
           </div>
           <button
             onClick={handleLogout}

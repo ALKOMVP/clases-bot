@@ -155,25 +155,47 @@ function UsuariosPageContent() {
       : { nombre: formData.nombre, apellido: formData.apellido, telefono: formData.telefono, fecha_alta: formData.fecha_alta, activo: true }; // POST: activo siempre true
     
     try {
-      const res = await fetchWithErrorHandling(url, {
+      const res = await fetch(url, {
         method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(dataToSend),
-      }, {
-        route: '/api/usuarios',
-        operation: editing ? 'update_usuario' : 'create_usuario'
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(dataToSend)
       });
 
-      setShowForm(false);
-      setEditing(null);
-      setFormData({
-        id: 0,
-        nombre: '',
-        apellido: '',
-        telefono: '',
-        fecha_alta: new Date().toISOString().split('T')[0],
-      });
-      loadUsuarios();
+      if (!res.ok) {
+        const data = await res.json();
+        if (data.code === 'TELEFONO_DUPLICADO') {
+          const message = editing 
+            ? `❌ Error: Ya existe otro alumno con el teléfono "${formData.telefono}".\n\nPor favor, ingresa un teléfono diferente.`
+            : `❌ Error: Ya existe un alumno con el teléfono "${formData.telefono}".\n\nPor favor, ingresa un teléfono diferente.`;
+          alert(message);
+          return;
+        }
+        if (data.code === 'NOMBRE_APELLIDO_DUPLICADO') {
+          const message = editing
+            ? `❌ Error: Ya existe otro alumno con el nombre "${formData.nombre}" y apellido "${formData.apellido}".\n\nPor favor, ingresa un nombre o apellido diferente.`
+            : `❌ Error: Ya existe un alumno con el nombre "${formData.nombre}" y apellido "${formData.apellido}".\n\nPor favor, ingresa un nombre o apellido diferente.`;
+          alert(message);
+          return;
+        }
+        alert(data.error || 'Error al guardar');
+        return;
+      }
+
+      const result = await res.json();
+      if (result.success) {
+        setShowForm(false);
+        setEditing(null);
+        setFormData({
+          id: 0,
+          nombre: '',
+          apellido: '',
+          telefono: '',
+          fecha_alta: new Date().toISOString().split('T')[0],
+        });
+        loadUsuarios();
+      }
     } catch (error: any) {
       alert(error.message || 'Error al guardar');
     }
@@ -335,10 +357,46 @@ function UsuariosPageContent() {
     
     // Filtro por búsqueda
     if (!searchTerm) return true;
-    const search = searchTerm.toLowerCase();
+    
+    const search = searchTerm.toLowerCase().trim();
+    
+    // Búsqueda avanzada: si hay múltiples palabras, buscar nombre y apellido en cualquier orden
+    if (search.includes(' ')) {
+      const words = search.split(/\s+/).filter(w => w.length > 0);
+      if (words.length >= 2) {
+        const nombreLower = usuario.nombre.toLowerCase();
+        const apellidoLower = usuario.apellido.toLowerCase();
+        const fullName = `${nombreLower} ${apellidoLower}`;
+        const word1 = words[0];
+        const word2 = words[1];
+        
+        // Buscar si nombre contiene una palabra y apellido contiene la otra (en cualquier orden)
+        const matchesNameApellido = 
+          (nombreLower.includes(word1) && apellidoLower.includes(word2)) ||
+          (nombreLower.includes(word2) && apellidoLower.includes(word1));
+        
+        // O buscar en el nombre completo
+        const matchesFullName = fullName.includes(search);
+        
+        // O buscar en teléfono
+        const matchesTelefono = (usuario.telefono || '').toLowerCase().includes(search);
+        
+        // O buscar en clases
+        const matchesClases = getClasesInscritas(usuario.id).toLowerCase().includes(search);
+        
+        return matchesNameApellido || matchesFullName || matchesTelefono || matchesClases;
+      }
+    }
+    
+    // Búsqueda simple (una palabra)
+    const nombreLower = usuario.nombre.toLowerCase();
+    const apellidoLower = usuario.apellido.toLowerCase();
+    const fullName = `${nombreLower} ${apellidoLower}`;
+    
     return (
-      usuario.nombre.toLowerCase().includes(search) ||
-      usuario.apellido.toLowerCase().includes(search) ||
+      nombreLower.includes(search) ||
+      apellidoLower.includes(search) ||
+      fullName.includes(search) ||
       (usuario.telefono || '').toLowerCase().includes(search) ||
       getClasesInscritas(usuario.id).toLowerCase().includes(search)
     );
@@ -486,10 +544,20 @@ function UsuariosPageContent() {
                   <input
                     type="tel"
                     value={formData.telefono}
-                    onChange={(e) => setFormData({ ...formData, telefono: e.target.value })}
+                    onChange={(e) => {
+                      // Solo permitir números
+                      const numbersOnly = e.target.value.replace(/\D/g, '');
+                      setFormData({ ...formData, telefono: numbersOnly });
+                    }}
+                    onKeyPress={(e) => {
+                      // Solo permitir números, backspace, delete, tab
+                      if (!/[0-9]/.test(e.key) && e.key !== 'Backspace' && e.key !== 'Delete' && e.key !== 'Tab') {
+                        e.preventDefault();
+                      }
+                    }}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg text-gray-900 placeholder:text-gray-500"
                     required
-                    placeholder="Ej: +54 11 1234-5678"
+                    placeholder="Ej: 541112345678"
                   />
                 </div>
                 <div>

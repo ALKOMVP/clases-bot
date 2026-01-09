@@ -59,10 +59,18 @@ export async function POST(request: NextRequest) {
       db = cloudflareContext.env.DB;
     }
     
+    // Si no está disponible en el contexto, intentar desde process.env (OpenNext lo popula)
+    if (!db && typeof process !== 'undefined' && (process.env as any).DB) {
+      db = (process.env as any).DB;
+    }
     if (!db) {
       db = getMockDBInstance();
     }
     
+    // Si no está disponible en el contexto, intentar desde process.env (OpenNext lo popula)
+    if (!db && typeof process !== 'undefined' && (process.env as any).DB) {
+      db = (process.env as any).DB;
+    }
     if (!db) {
       return NextResponse.json({ error: 'Base de datos no disponible' }, { status: 503 });
     }

@@ -95,13 +95,57 @@ class MockDB {
             const mockData = getMockData();
             
             // Manejar COUNT(*) queries
-            if (query.includes('SELECT COUNT(*)')) {
+            if (query.includes('SELECT COUNT(*)') || query.includes('SELECT COUNT(DISTINCT')) {
               if (query.includes('FROM reserva') && query.includes('WHERE clase_id')) {
-                // COUNT de reservas por clase_id
-                const claseId = params && params.length > 0 ? parseInt(params[0]) : null;
+                // COUNT de reservas por clase_id (puede incluir filtros por fecha_clase y es_reasignacion)
+                const claseId = params && params.length > 0 ? Number(params[0]) : null;
                 if (claseId !== null) {
-                  const count = mockData.reservas.filter((r: any) => r.clase_id === claseId).length;
-                  return { count };
+                  let reservasFiltradas = mockData.reservas.filter((r: any) => Number(r.clase_id) === claseId);
+                  
+                  // Filtrar por fecha_clase si está en la query
+                  if (query.includes('fecha_clase')) {
+                    if (query.includes('fecha_clase IS NULL') || query.includes("fecha_clase = 'null'") || query.includes("fecha_clase = ''")) {
+                      // Solo reservas fijas (sin fecha_clase)
+                      reservasFiltradas = reservasFiltradas.filter((r: any) => 
+                        !r.fecha_clase || r.fecha_clase === null || r.fecha_clase === 'null' || r.fecha_clase === ''
+                      );
+                      
+                      // También filtrar por es_reasignacion si está
+                      if (query.includes('es_reasignacion IS NULL') || query.includes('es_reasignacion = 0')) {
+                        reservasFiltradas = reservasFiltradas.filter((r: any) => 
+                          !r.es_reasignacion || r.es_reasignacion === 0
+                        );
+                      }
+                    } else if (query.includes('fecha_clase = ?')) {
+                      // Reservas temporales para una fecha específica
+                      const fechaClaseIndex = query.indexOf('fecha_clase = ?');
+                      const beforeFechaClase = query.substring(0, fechaClaseIndex);
+                      const paramIndex = (beforeFechaClase.match(/\?/g) || []).length;
+                      if (params[paramIndex] !== undefined) {
+                        const fechaClase = params[paramIndex];
+                        reservasFiltradas = reservasFiltradas.filter((r: any) => r.fecha_clase === fechaClase);
+                      }
+                    }
+                  }
+                  
+                  // Filtrar por es_reasignacion si está en la query
+                  if (query.includes('es_reasignacion = 1')) {
+                    reservasFiltradas = reservasFiltradas.filter((r: any) => 
+                      r.es_reasignacion === 1 || r.es_reasignacion === true
+                    );
+                  } else if (query.includes('es_reasignacion = 0') || query.includes('es_reasignacion IS NULL')) {
+                    reservasFiltradas = reservasFiltradas.filter((r: any) => 
+                      !r.es_reasignacion || r.es_reasignacion === 0
+                    );
+                  }
+                  
+                  // Si es COUNT(DISTINCT usuario_id), contar usuarios únicos
+                  if (query.includes('COUNT(DISTINCT usuario_id)')) {
+                    const usuariosUnicos = new Set(reservasFiltradas.map((r: any) => Number(r.usuario_id)));
+                    return { count: usuariosUnicos.size };
+                  }
+                  
+                  return { count: reservasFiltradas.length };
                 }
               }
               if (query.includes('FROM clase')) {
@@ -113,12 +157,22 @@ class MockDB {
                 return { count: mockData.usuarios.length };
               }
               if (query.includes('FROM reserva')) {
-                // COUNT de reservas
+                // COUNT de reservas (sin filtros)
                 return { count: mockData.reservas.length };
               }
             }
             
             if (query.includes('SELECT') && query.includes('WHERE')) {
+              // Manejar SELECT de clase WHERE id = ?
+              if (query.includes('FROM clase') && query.includes('WHERE id')) {
+                const claseId = params && params.length > 0 ? Number(params[0]) : null;
+                if (claseId !== null) {
+                  const clase = mockData.clases.find((c: any) => Number(c.id) === claseId);
+                  return clase || null;
+                }
+                return null;
+              }
+              
               if (query.includes('FROM usuario') && query.includes('id')) {
                 const usuario = mockData.usuarios.find((u: any) => u.id === parseInt(params[0]));
                 if (!usuario) return null;
@@ -223,6 +277,9 @@ class MockDB {
               if (usuario && clase) {
                 results.push({
                   ...reserva,
+                  // Asegurar que fecha_clase y es_reasignacion estén siempre presentes
+                  fecha_clase: reserva.fecha_clase !== undefined ? reserva.fecha_clase : null,
+                  es_reasignacion: reserva.es_reasignacion !== undefined ? reserva.es_reasignacion : 0,
                   nombre: usuario.nombre,
                   apellido: usuario.apellido,
                   dia: clase.dia,
@@ -255,9 +312,73 @@ class MockDB {
                   }
                 }
               }
+              
+              // Filtrar por fecha_clase si está en la query
+              if (query.includes('r.fecha_clase') || query.includes('fecha_clase = ?')) {
+                const fechaClaseIndex = query.indexOf('fecha_clase = ?');
+                if (fechaClaseIndex !== -1) {
+                  const beforeFechaClase = query.substring(0, fechaClaseIndex);
+                  const paramIndex = (beforeFechaClase.match(/\?/g) || []).length;
+                  if (params[paramIndex] !== undefined) {
+                    const fechaClaseValue = params[paramIndex];
+                    results = results.filter((r: any) => {
+                      if (!fechaClaseValue || fechaClaseValue === null || fechaClaseValue === 'null' || fechaClaseValue === '') {
+                        // Si no hay fecha_clase, incluir solo reservas fijas (sin fecha_clase)
+                        return !r.fecha_clase || r.fecha_clase === null || r.fecha_clase === 'null' || r.fecha_clase === '';
+                      } else {
+                        // Si hay fecha_clase, incluir reservas que coincidan con esa fecha
+                        return r.fecha_clase === fechaClaseValue;
+                      }
+                    });
+                  }
+                }
+                
+                // También manejar: (r.fecha_clase IS NULL OR r.fecha_clase = ? OR ...)
+                if (query.includes('fecha_clase IS NULL') || query.includes('fecha_clase = \'null\'')) {
+                  // Esto significa que queremos reservas fijas (sin fecha_clase) O temporales para una fecha específica
+                  const fechaClaseParam = params.find((p: any) => p && typeof p === 'string' && p.match(/^\d{4}-\d{2}-\d{2}$/));
+                  if (fechaClaseParam) {
+                    results = results.filter((r: any) => {
+                      const sinFecha = !r.fecha_clase || r.fecha_clase === null || r.fecha_clase === 'null' || r.fecha_clase === '';
+                      const coincideFecha = r.fecha_clase === fechaClaseParam;
+                      return sinFecha || coincideFecha;
+                    });
+                  } else {
+                    // Si no hay parámetro de fecha, solo mostrar fijas
+                    results = results.filter((r: any) => !r.fecha_clase || r.fecha_clase === null || r.fecha_clase === 'null' || r.fecha_clase === '');
+                  }
+                }
+              }
+              
+              // Filtrar por es_reasignacion si está en la query
+              if (query.includes('es_reasignacion') && (query.includes('= ?') || query.includes('= 1') || query.includes('= 0'))) {
+                if (query.includes('es_reasignacion = 1')) {
+                  results = results.filter((r: any) => r.es_reasignacion === 1 || r.es_reasignacion === true);
+                } else if (query.includes('es_reasignacion = 0') || query.includes('es_reasignacion IS NULL')) {
+                  results = results.filter((r: any) => !r.es_reasignacion || r.es_reasignacion === 0);
+                } else if (query.includes('es_reasignacion = ?')) {
+                  const esReasignacionIndex = query.indexOf('es_reasignacion = ?');
+                  if (esReasignacionIndex !== -1) {
+                    const beforeEsReasignacion = query.substring(0, esReasignacionIndex);
+                    const paramIndex = (beforeEsReasignacion.match(/\?/g) || []).length;
+                    if (params[paramIndex] !== undefined) {
+                      const esReasignacionValue = params[paramIndex] === 1 || params[paramIndex] === true;
+                      results = results.filter((r: any) => {
+                        const rEsReasignacion = r.es_reasignacion === 1 || r.es_reasignacion === true;
+                        return rEsReasignacion === esReasignacionValue;
+                      });
+                    }
+                  }
+                }
+              }
             }
           } else {
-            results = [...mockData.reservas];
+            // Si no hay JOIN, devolver reservas directamente pero asegurar que tengan fecha_clase y es_reasignacion
+            results = mockData.reservas.map((r: any) => ({
+              ...r,
+              fecha_clase: r.fecha_clase !== undefined ? r.fecha_clase : null,
+              es_reasignacion: r.es_reasignacion !== undefined ? r.es_reasignacion : 0
+            }));
           }
               
               // Aplicar ORDER BY
@@ -362,12 +483,37 @@ class MockDB {
               }
             }
             if (query.includes('INSERT INTO reserva')) {
-              // Asegurar que los IDs sean números
-              const reserva = {
+              // Detectar qué campos vienen en el INSERT
+              // Puede ser:
+              // 1. INSERT INTO reserva (usuario_id, clase_id) VALUES (?, ?)
+              // 2. INSERT INTO reserva (usuario_id, clase_id, fecha_clase, es_reasignacion, created_at) VALUES (?, ?, ?, 1, datetime('now'))
+              // 3. INSERT INTO reserva (usuario_id, clase_id, created_at) VALUES (?, ?, ?)
+              
+              let reserva: any = {
                 usuario_id: Number(params[0]),
-                clase_id: Number(params[1]),
-                created_at: params[2] || new Date().toISOString()
+                clase_id: Number(params[1])
               };
+              
+              // Si hay fecha_clase (param[2]) y es_reasignacion (param[3]), es una reserva temporal
+              if (params.length >= 3 && params[2] !== undefined && params[2] !== null && params[2] !== '') {
+                reserva.fecha_clase = params[2];
+                reserva.es_reasignacion = params.length >= 4 ? (params[3] === 1 || params[3] === true ? 1 : 0) : 0;
+              } else {
+                // Reserva fija: sin fecha_clase y sin es_reasignacion (o 0)
+                reserva.fecha_clase = null;
+                reserva.es_reasignacion = 0;
+              }
+              
+              // created_at puede venir como último parámetro o generarse automáticamente
+              if (query.includes('datetime(\'now\')')) {
+                reserva.created_at = new Date().toISOString();
+              } else if (params.length >= 3 && params[params.length - 1] && !reserva.fecha_clase) {
+                reserva.created_at = params[params.length - 1];
+              } else if (params.length >= 4 && params[params.length - 1]) {
+                reserva.created_at = params[params.length - 1];
+              } else {
+                reserva.created_at = new Date().toISOString();
+              }
               
               // Verificar que el usuario existe y está activo
               const usuario = mockData.usuarios.find((u: any) => Number(u.id) === reserva.usuario_id);
@@ -384,19 +530,67 @@ class MockDB {
                 throw error;
               }
               
-              // Verificar si ya existe (comparando como números)
-              const exists = mockData.reservas.findIndex(
-                (r: any) => Number(r.usuario_id) === reserva.usuario_id && Number(r.clase_id) === reserva.clase_id
-              );
+              // Para reservas fijas, verificar si ya existe (usuario_id + clase_id único)
+              // Para reservas temporales, verificar si ya existe (usuario_id + clase_id + fecha_clase único)
+              let exists = -1;
+              if (reserva.fecha_clase && reserva.es_reasignacion === 1) {
+                // Reserva temporal: puede haber múltiples reservas del mismo usuario/clase en fechas diferentes
+                exists = mockData.reservas.findIndex(
+                  (r: any) => 
+                    Number(r.usuario_id) === reserva.usuario_id && 
+                    Number(r.clase_id) === reserva.clase_id &&
+                    r.fecha_clase === reserva.fecha_clase &&
+                    (r.es_reasignacion === 1 || r.es_reasignacion === true)
+                );
+              } else {
+                // Reserva fija: no puede haber duplicados (usuario_id + clase_id único)
+                exists = mockData.reservas.findIndex(
+                  (r: any) => 
+                    Number(r.usuario_id) === reserva.usuario_id && 
+                    Number(r.clase_id) === reserva.clase_id &&
+                    (!r.fecha_clase || r.fecha_clase === null || r.fecha_clase === 'null' || r.fecha_clase === '') &&
+                    (!r.es_reasignacion || r.es_reasignacion === 0)
+                );
+                
+                // También verificar que no haya una reserva temporal para el mismo usuario/clase en la misma fecha
+                // (esto se maneja en el endpoint, pero lo verificamos aquí también)
+              }
+              
               if (exists !== -1) {
-                throw new Error('UNIQUE constraint failed: reserva.usuario_id, reserva.clase_id');
+                if (reserva.fecha_clase) {
+                  throw new Error('Ya existe una reserva temporal para este usuario en esta clase y fecha');
+                } else {
+                  throw new Error('UNIQUE constraint failed: reserva.usuario_id, reserva.clase_id');
+                }
               }
               
               // Verificar el cupo máximo (35 alumnos por clase)
+              // Para reservas fijas: contar todas las reservas fijas
+              // Para reservas temporales: contar fijas + temporales para esa fecha específica
               const MAX_CUPO = 35;
-              const reservasClase = mockData.reservas.filter(
-                (r: any) => Number(r.clase_id) === reserva.clase_id
-              );
+              let reservasClase: any[] = [];
+              
+              if (reserva.fecha_clase && reserva.es_reasignacion === 1) {
+                // Reserva temporal: contar fijas + temporales para esta fecha
+                reservasClase = mockData.reservas.filter((r: any) => {
+                  if (Number(r.clase_id) !== reserva.clase_id) return false;
+                  
+                  // Contar reservas fijas
+                  const esFija = !r.fecha_clase || r.fecha_clase === null || r.fecha_clase === 'null' || r.fecha_clase === '';
+                  if (esFija && (!r.es_reasignacion || r.es_reasignacion === 0)) return true;
+                  
+                  // Contar reservas temporales para esta fecha
+                  const esTemporal = r.fecha_clase && r.fecha_clase === reserva.fecha_clase && (r.es_reasignacion === 1 || r.es_reasignacion === true);
+                  return esTemporal;
+                });
+              } else {
+                // Reserva fija: contar solo reservas fijas
+                reservasClase = mockData.reservas.filter(
+                  (r: any) => Number(r.clase_id) === reserva.clase_id && 
+                  (!r.fecha_clase || r.fecha_clase === null || r.fecha_clase === 'null' || r.fecha_clase === '') &&
+                  (!r.es_reasignacion || r.es_reasignacion === 0)
+                );
+              }
               
               if (reservasClase.length >= MAX_CUPO) {
                 const error: any = new Error(`Esta clase ya tiene el cupo completo (${MAX_CUPO} alumnos). No se pueden inscribir más alumnos.`);

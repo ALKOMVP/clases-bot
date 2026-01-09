@@ -1,0 +1,293 @@
+'use client';
+
+import { useState, useEffect } from 'react';
+import Navbar from '@/components/Navbar';
+import TableScrollContainer from '@/components/TableScrollContainer';
+import { fetchWithErrorHandling } from '@/lib/frontend-error-handler';
+
+interface Cancelacion {
+  usuario_id: number;
+  clase_id: number;
+  fecha_clase: string;
+  usuario_nombre?: string;
+  usuario_apellido?: string;
+  clase_dia?: string;
+  clase_hora?: string;
+  clase_nombre?: string;
+  created_at?: string;
+}
+
+export default function CancelacionesPage() {
+  const [cancelaciones, setCancelaciones] = useState<Cancelacion[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [deleting, setDeleting] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [showDebugButtons, setShowDebugButtons] = useState(false);
+
+  // Ctrl+D para mostrar botones de debug
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'd') {
+        e.preventDefault();
+        setShowDebugButtons(prev => !prev);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
+  useEffect(() => {
+    loadCancelaciones();
+  }, []);
+
+  const loadCancelaciones = async () => {
+    setLoading(true);
+    try {
+      const res = await fetchWithErrorHandling('/api/cancelaciones', {}, {
+        route: '/api/cancelaciones',
+        operation: 'load_cancelaciones'
+      });
+      const data = await res.json();
+      Array.isArray(data) ? setCancelaciones(data) : setCancelaciones([]);
+    } catch (error) {
+      console.error('Error loading cancelaciones:', error);
+      setCancelaciones([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteAll = async () => {
+    if (!confirm('¿Estás seguro de que deseas anular TODAS las cancelaciones?\n\nEsta acción no se puede deshacer y los alumnos afectados volverán a aparecer en sus clases fijas.')) {
+      return;
+    }
+
+    setDeleting(true);
+    try {
+      const res = await fetchWithErrorHandling('/api/cancelaciones', {
+        method: 'DELETE'
+      }, {
+        route: '/api/cancelaciones',
+        operation: 'delete_all_cancelaciones'
+      });
+      const data = await res.json();
+      if (res.ok) {
+        alert(`✅ Se anularon ${data.deleted || cancelaciones.length} cancelaciones exitosamente.`);
+        loadCancelaciones();
+      } else {
+        alert(data.error || 'Error al anular cancelaciones');
+      }
+    } catch (error: any) {
+      alert(error.message || 'Error al anular cancelaciones');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const getDiaNombre = (dia: string) => {
+    const dias: { [key: string]: string } = {
+      'Lun': 'Lunes',
+      'Mar': 'Martes',
+      'Jue': 'Jueves',
+      'Sab': 'Sábado'
+    };
+    return dias[dia] || dia;
+  };
+
+  const formatFechaClase = (fecha: string) => {
+    if (!fecha) return '-';
+    try {
+      return new Date(fecha + 'T00:00:00').toLocaleDateString('es-AR', {
+        weekday: 'long',
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric'
+      });
+    } catch (error) {
+      return fecha;
+    }
+  };
+
+  const formatCreatedAt = (createdAt: string | undefined) => {
+    if (!createdAt) return '-';
+    try {
+      return new Date(createdAt).toLocaleDateString('es-AR', {
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    } catch (error) {
+      return createdAt;
+    }
+  };
+
+  const filteredCancelaciones = cancelaciones.filter(cancelacion => {
+    if (!searchTerm) return true;
+
+    const search = searchTerm.toLowerCase().trim();
+    const nombre = (cancelacion.usuario_nombre || '').toLowerCase();
+    const apellido = (cancelacion.usuario_apellido || '').toLowerCase();
+    const nombreCompleto = `${apellido}, ${nombre}`;
+    const diaNombre = cancelacion.clase_dia ? getDiaNombre(cancelacion.clase_dia) : '';
+    const hora = (cancelacion.clase_hora || '').toLowerCase();
+    const claseNombre = (cancelacion.clase_nombre || '').toLowerCase();
+    const fechaClaseFormateada = formatFechaClase(cancelacion.fecha_clase).toLowerCase();
+    const createdAtFormateado = formatCreatedAt(cancelacion.created_at).toLowerCase();
+    const fechaClase = cancelacion.fecha_clase.toLowerCase();
+
+    return (
+      nombre.includes(search) ||
+      apellido.includes(search) ||
+      nombreCompleto.includes(search) ||
+      diaNombre.toLowerCase().includes(search) ||
+      hora.includes(search) ||
+      claseNombre.includes(search) ||
+      fechaClaseFormateada.includes(search) ||
+      createdAtFormateado.includes(search) ||
+      fechaClase.includes(search)
+    );
+  });
+
+  return (
+    <div className="min-h-screen bg-gray-50 overflow-x-hidden">
+      <Navbar />
+      <div className="max-w-7xl mx-auto px-2 sm:px-4 lg:px-8 py-4 sm:py-6 lg:py-8">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 sm:gap-0 mb-4 sm:mb-6">
+          <div>
+            <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900">Cancelaciones</h1>
+            <p className="text-gray-600 mt-1 sm:mt-2 text-sm sm:text-base">
+              Lista de todas las cancelaciones de alumnos fijos por fecha específica
+            </p>
+          </div>
+          {cancelaciones.length > 0 && showDebugButtons && (
+            <button
+              onClick={handleDeleteAll}
+              disabled={deleting}
+              className="bg-red-600 text-white px-3 sm:px-4 py-2 rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 text-sm sm:text-base w-full sm:w-auto"
+            >
+              {deleting ? 'Anulando...' : `Anular Todas (${cancelaciones.length})`}
+            </button>
+          )}
+        </div>
+
+        {cancelaciones.length > 0 && (
+          <div className="mb-4">
+            <input
+              type="text"
+              placeholder="Buscar por nombre, apellido, clase, fecha..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm sm:text-base"
+            />
+            {searchTerm && (
+              <p className="mt-2 text-sm text-gray-600">
+                Mostrando {filteredCancelaciones.length} de {cancelaciones.length} cancelaciones
+              </p>
+            )}
+          </div>
+        )}
+
+        {loading ? (
+          <div className="bg-white rounded-lg shadow-md p-8 text-center">
+            <p className="text-gray-600">Cargando cancelaciones...</p>
+          </div>
+        ) : cancelaciones.length === 0 ? (
+          <div className="bg-white rounded-lg shadow-md p-8 text-center">
+            <p className="text-gray-600 mb-2">No hay cancelaciones registradas.</p>
+            <p className="text-sm text-gray-500">
+              Las cancelaciones aparecerán aquí cuando un alumno fijo cancele una clase para una fecha específica.
+            </p>
+          </div>
+        ) : filteredCancelaciones.length === 0 && searchTerm ? (
+          <div className="bg-white rounded-lg shadow-md p-8 text-center">
+            <p className="text-gray-600 mb-2">
+              No se encontraron cancelaciones que coincidan con "{searchTerm}".
+            </p>
+            <button
+              onClick={() => setSearchTerm('')}
+              className="text-purple-600 hover:text-purple-700 text-sm font-medium"
+            >
+              Limpiar búsqueda
+            </button>
+          </div>
+        ) : (
+          <div className="bg-white rounded-lg shadow-md overflow-hidden">
+            <div className="px-4 py-3 border-b border-gray-200 bg-gray-50">
+              <p className="text-sm text-gray-600">
+                {searchTerm ? (
+                  <>
+                    Mostrando <span className="font-semibold text-gray-900">{filteredCancelaciones.length}</span> de{' '}
+                    <span className="font-semibold text-gray-900">{cancelaciones.length}</span> cancelaciones
+                  </>
+                ) : (
+                  <>
+                    Total de cancelaciones: <span className="font-semibold text-gray-900">{cancelaciones.length}</span>
+                  </>
+                )}
+              </p>
+            </div>
+            <TableScrollContainer className="mx-0">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Alumno
+                    </th>
+                    <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden md:table-cell">
+                      Clase
+                    </th>
+                    <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Fecha Cancelada
+                    </th>
+                    <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden lg:table-cell">
+                      Fecha de Cancelación
+                    </th>
+                    <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Tipo
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {filteredCancelaciones.map((cancelacion, index) => (
+                    <tr key={`${cancelacion.usuario_id}-${cancelacion.clase_id}-${cancelacion.fecha_clase}-${index}`} className="hover:bg-gray-50">
+                      <td className="px-4 sm:px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm font-medium text-gray-900">
+                          {cancelacion.usuario_apellido || 'N/A'}, {cancelacion.usuario_nombre || 'N/A'}
+                        </div>
+                      </td>
+                      <td className="px-4 sm:px-6 py-4 whitespace-nowrap hidden md:table-cell">
+                        <div className="text-sm text-gray-900">
+                          {cancelacion.clase_dia ? getDiaNombre(cancelacion.clase_dia) : 'N/A'} {cancelacion.clase_hora || ''}
+                        </div>
+                        {cancelacion.clase_nombre && (
+                          <div className="text-xs text-gray-500">
+                            {cancelacion.clase_nombre}
+                          </div>
+                        )}
+                      </td>
+                      <td className="px-4 sm:px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm text-gray-900">
+                          {formatFechaClase(cancelacion.fecha_clase)}
+                        </div>
+                      </td>
+                      <td className="px-4 sm:px-6 py-4 whitespace-nowrap text-sm text-gray-500 hidden lg:table-cell">
+                        {formatCreatedAt(cancelacion.created_at)}
+                      </td>
+                      <td className="px-4 sm:px-6 py-4 whitespace-nowrap">
+                        <span className="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-orange-100 text-orange-800">
+                          Cancelación Fija
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </TableScrollContainer>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
