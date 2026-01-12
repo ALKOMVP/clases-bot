@@ -54,7 +54,10 @@ interface CalendarItem {
 }
 
 export default function CalendarioPage() {
-  const [reservas, setReservas] = useState<Reserva[]>([]);
+  // Mantener separado: dataset global (cards) vs dataset por-fecha (modal).
+  // Si pisamos el global al abrir el modal, las cards “pierden” temporales hasta recargar.
+  const [reservasAll, setReservasAll] = useState<Reserva[]>([]);
+  const [reservasModal, setReservasModal] = useState<Reserva[]>([]);
   const [clases, setClases] = useState<Clase[]>([]);
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
   const [cancelaciones, setCancelaciones] = useState<Cancelacion[]>([]);
@@ -87,12 +90,12 @@ export default function CalendarioPage() {
 
   // Auto-fix de reservas sin fecha_clase (solo cuando se activa explícitamente y no se ha ejecutado antes)
   useEffect(() => {
-    if (reservas.length > 0 && clases.length > 0 && !loading && needsAutoFix && !isAutoFixing && !hasCheckedAutoFix) {
+    if (reservasAll.length > 0 && clases.length > 0 && !loading && needsAutoFix && !isAutoFixing && !hasCheckedAutoFix) {
       const doAutoFix = async () => {
         setIsAutoFixing(true);
         setHasCheckedAutoFix(true);
         try {
-          await loadReservas();
+          await loadReservasAll();
           await loadListaEsperaCounts();
         } finally {
           setIsAutoFixing(false);
@@ -106,8 +109,8 @@ export default function CalendarioPage() {
 
   // Detectar reservas sin fecha_clase solo una vez después de la carga inicial
   useEffect(() => {
-    if (!loading && !hasCheckedAutoFix && reservas.length > 0 && !needsAutoFix && !isAutoFixing) {
-      const hasReservasSinFecha = reservas.some(r => !r.fecha_clase || r.fecha_clase === 'null' || r.fecha_clase === null);
+    if (!loading && !hasCheckedAutoFix && reservasAll.length > 0 && !needsAutoFix && !isAutoFixing) {
+      const hasReservasSinFecha = reservasAll.some(r => !r.fecha_clase || r.fecha_clase === 'null' || r.fecha_clase === null);
       if (hasReservasSinFecha) {
         // Solo activar auto-fix una vez, después de un pequeño delay para evitar loops
         const timer = setTimeout(() => {
@@ -137,28 +140,20 @@ export default function CalendarioPage() {
     }
   };
 
-  const loadReservas = async (fechaClase?: string) => {
+  const loadReservasAll = async () => {
     try {
-      // Si se especifica fechaClase, incluirla en la URL para que el backend filtre cancelaciones
-      // Si no, cargar todas las reservas
-      let url = '/api/reservas?include_reasignaciones=true';
-      if (fechaClase) {
-        url += `&fecha_clase=${fechaClase}`;
-        console.log('[loadReservas] 🔄 Cargando reservas con fecha específica (backend filtrará cancelaciones):', fechaClase);
-      } else {
-        console.log('[loadReservas] 🔄 Cargando TODAS las reservas (sin filtro de fecha)');
-      }
+      const url = '/api/reservas?include_reasignaciones=true';
+      console.log('[loadReservasAll] 🔄 Cargando TODAS las reservas (sin filtro de fecha)');
 
       const res = await fetchWithErrorHandling(url, {}, {
         route: '/api/reservas',
-        operation: 'load_reservas'
+        operation: 'load_reservas_all'
       });
       const data = await res.json();
 
       if (Array.isArray(data)) {
-        console.log('[loadReservas] ✅ Reservas cargadas:', {
+        console.log('[loadReservasAll] ✅ Reservas cargadas:', {
           total: data.length,
-          conFechaClase: fechaClase || 'NINGUNA',
           reservas: data.map((r: Reserva) => ({
             usuario_id: r.usuario_id,
             clase_id: r.clase_id,
@@ -167,17 +162,43 @@ export default function CalendarioPage() {
             es_reasignacion: r.es_reasignacion || 0
           }))
         });
-        setReservas(data);
+        setReservasAll(data);
         setRefreshCounter(prev => prev + 1);
         return data;
       } else {
-        console.warn('[loadReservas] ⚠️ Respuesta no es un array:', typeof data, data);
-        setReservas([]);
+        console.warn('[loadReservasAll] ⚠️ Respuesta no es un array:', typeof data, data);
+        setReservasAll([]);
         return [];
       }
     } catch (error) {
-      console.error('[loadReservas] ❌ Error loading reservas:', error);
-      setReservas([]);
+      console.error('[loadReservasAll] ❌ Error loading reservas:', error);
+      setReservasAll([]);
+      return [];
+    }
+  };
+
+  const loadReservasModal = async (fechaClase: string) => {
+    try {
+      const url = `/api/reservas?include_reasignaciones=true&fecha_clase=${fechaClase}`;
+      console.log('[loadReservasModal] 🔄 Cargando reservas con fecha específica (backend filtrará cancelaciones):', fechaClase);
+
+      const res = await fetchWithErrorHandling(url, {}, {
+        route: '/api/reservas',
+        operation: 'load_reservas_modal'
+      });
+      const data = await res.json();
+
+      if (Array.isArray(data)) {
+        setReservasModal(data);
+        return data;
+      } else {
+        console.warn('[loadReservasModal] ⚠️ Respuesta no es un array:', typeof data, data);
+        setReservasModal([]);
+        return [];
+      }
+    } catch (error) {
+      console.error('[loadReservasModal] ❌ Error loading reservas:', error);
+      setReservasModal([]);
       return [];
     }
   };
@@ -191,7 +212,7 @@ export default function CalendarioPage() {
     const fechaSet = new Set<string>();
     
     // Incluir fechas de reservas temporales existentes
-    reservas.forEach(r => {
+    reservasAll.forEach(r => {
       if (r.fecha_clase && r.fecha_clase !== 'null' && r.fecha_clase !== null) {
         fechaSet.add(r.fecha_clase);
       }
@@ -289,7 +310,7 @@ export default function CalendarioPage() {
     const initData = async () => {
       setLoading(true);
       try {
-        await Promise.all([loadUsuarios(), loadClases(), loadReservas(), loadCancelaciones()]);
+        await Promise.all([loadUsuarios(), loadClases(), loadReservasAll(), loadCancelaciones()]);
       } finally {
         setLoading(false);
       }
@@ -338,7 +359,7 @@ export default function CalendarioPage() {
         const clasesDelDia = clases
           .filter(c => c.dia === diaClase)
           .map(clase => {
-            const reservasClase = reservas.filter(r => {
+            const reservasClase = reservasAll.filter(r => {
               if (r.clase_id !== clase.id) return false;
               
               const esFija = !r.fecha_clase || r.fecha_clase === 'null' || r.fecha_clase === null;
@@ -415,13 +436,14 @@ export default function CalendarioPage() {
     }
 
     return calendar;
-  }, [clases, reservas, cancelaciones, listaEspera, loading, refreshCounter]);
+  }, [clases, reservasAll, cancelaciones, listaEspera, loading, refreshCounter]);
 
   const handleCloseModal = () => {
     setListaEspera([]);
     setSearchAlumnoTemporal('');
     setProcessing(false);
     setSelectedClase(null);
+    setReservasModal([]);
     setShowModal(false);
     setRefreshCounter(prev => prev + 1);
   };
@@ -430,7 +452,7 @@ export default function CalendarioPage() {
     setSelectedClase({ clase, fecha });
     setShowModal(true);
     const fechaStr = fecha.toISOString().split('T')[0];
-    await loadReservas(fechaStr);
+    await loadReservasModal(fechaStr);
 
     try {
       console.log(`[handleClaseClick] 🔄 Cargando lista de espera para clase ${clase.id}, fecha ${fechaStr}...`);
@@ -476,10 +498,11 @@ export default function CalendarioPage() {
 
     const fechaStr = selectedClase.fecha.toISOString().split('T')[0];
     const claseId = selectedClase.clase.id;
+    const base = reservasModal.length > 0 ? reservasModal : reservasAll;
 
     // Usuarios con reservas fijas (sin fecha_clase o fecha_clase null)
     const usuariosFijos = new Set(
-      reservas
+      base
         .filter(r => r.clase_id === claseId && (!r.es_reasignacion || r.es_reasignacion === 0) && (!r.fecha_clase || r.fecha_clase === 'null' || r.fecha_clase === null))
         .map(r => r.usuario_id)
     );
@@ -527,10 +550,11 @@ export default function CalendarioPage() {
   };
 
   const getReservasTemporales = (claseId: number, fecha: Date): Reserva[] => {
-    if (!selectedClase) return reservas.filter(r => r.clase_id === claseId);
+    const base = selectedClase ? (reservasModal.length > 0 ? reservasModal : reservasAll) : reservasAll;
+    if (!selectedClase) return base.filter(r => r.clase_id === claseId);
     
     const fechaStr = fecha.toISOString().split('T')[0];
-    const temporales = reservas.filter(r => {
+    const temporales = base.filter(r => {
       if (Number(r.clase_id) !== Number(claseId)) return false;
       const esReasignacion = r.es_reasignacion === 1 || r.es_reasignacion === true || Number(r.es_reasignacion) === 1;
       const tieneFecha = r.fecha_clase && r.fecha_clase !== 'null' && r.fecha_clase !== null && r.fecha_clase !== '';
@@ -539,7 +563,7 @@ export default function CalendarioPage() {
     });
     
     console.log('[getReservasTemporales] Filtrado para clase', claseId, 'fecha', fechaStr, ':', {
-      totalReservas: reservas.length,
+      totalReservas: base.length,
       temporalesEncontradas: temporales.length,
       detalles: temporales.map(r => ({
         usuario_id: r.usuario_id,
@@ -556,7 +580,7 @@ export default function CalendarioPage() {
   const getReservasFijas = (claseId: number, fecha: Date): Reserva[] => {
     const fechaStr = fecha.toISOString().split('T')[0];
     
-    return reservas.filter(r => {
+    return reservasAll.filter(r => {
       if (Number(r.clase_id) !== Number(claseId)) return false;
       const esReasignacion = r.es_reasignacion === 1 || r.es_reasignacion === true || Number(r.es_reasignacion) === 1;
       const tieneFecha = r.fecha_clase && r.fecha_clase !== 'null' && r.fecha_clase !== null && r.fecha_clase !== '';
@@ -709,7 +733,7 @@ export default function CalendarioPage() {
         // SEGUNDO: Recargar TODAS las reservas sin filtro (el frontend filtrará cancelaciones en useMemo)
         // Esto asegura que tengamos TODAS las reservas y el calendarData las filtre correctamente
         console.log('[handleDeleteReserva] 🔄 Recargando TODAS las reservas para actualizar cards...');
-        await loadReservas();
+        await loadReservasAll();
         console.log('[handleDeleteReserva] ✅ Todas las reservas recargadas');
 
         // CUARTO: Recargar lista de espera detallada para el modal
@@ -743,7 +767,7 @@ export default function CalendarioPage() {
       } else {
         // Si no hay selectedClase, recargar todo sin fecha específica
         console.log('[handleDeleteReserva] Recargando TODAS las reservas para actualizar cards...');
-        await loadReservas();
+        await loadReservasAll();
         console.log('[handleDeleteReserva] Todas las reservas recargadas');
         await loadCancelaciones();
         console.log('[handleDeleteReserva] Cancelaciones recargadas');
@@ -820,11 +844,11 @@ export default function CalendarioPage() {
       }
 
       console.log('[handleDeleteListaEspera] Recargando TODAS las reservas para actualizar cards...');
-      await loadReservas();
+      await loadReservasAll();
       console.log('[handleDeleteListaEspera] Todas las reservas recargadas');
       await loadCancelaciones();
       console.log('[handleDeleteListaEspera] Cancelaciones recargadas');
-      await loadReservas(fechaStr);
+      await loadReservasModal(fechaStr);
       // No activar auto-fix automáticamente para evitar loops
       // setNeedsAutoFix(true);
       setRefreshCounter(prev => prev + 1);
@@ -957,7 +981,7 @@ export default function CalendarioPage() {
           console.warn('⚠️ Error obteniendo diagnóstico después:', error);
         }
 
-        await loadReservas();
+        await loadReservasAll();
         console.log('[handleAddTemporal] Todas las reservas recargadas para actualizar cards del calendario');
         await new Promise(resolve => setTimeout(resolve, 500));
 
@@ -1002,7 +1026,7 @@ export default function CalendarioPage() {
           setListaEspera([]);
         }
 
-        await loadReservas(fechaStr);
+        await loadReservasModal(fechaStr);
         // No activar auto-fix automáticamente para evitar loops
         // setNeedsAutoFix(true);
         setRefreshCounter(prev => prev + 1);
@@ -1042,7 +1066,7 @@ export default function CalendarioPage() {
       const data = await res.json();
       if (res.ok) {
         alert(data.message || 'Reservas generadas correctamente');
-        await loadReservas();
+        await loadReservasAll();
       } else {
         alert(data.error || 'Error al generar reservas');
       }
@@ -1073,7 +1097,7 @@ export default function CalendarioPage() {
       const data = await res.json();
       if (res.ok) {
         alert(data.message || 'Todas las reservas han sido eliminadas');
-        await loadReservas();
+        await loadReservasAll();
       } else {
         alert(data.error || 'Error al borrar reservas');
       }

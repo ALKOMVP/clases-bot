@@ -2,6 +2,105 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getMockDBInstance } from '@/lib/db-mock';
 import { createErrorResponse, getEnvironmentInfo } from '@/lib/error-handler';
 
+function getEnvVar(name: string): string {
+  const cf = (globalThis as any)[Symbol.for('__cloudflare-context__')];
+  const v = cf?.env?.[name] ?? (typeof process !== 'undefined' ? process.env?.[name] : undefined);
+  return typeof v === 'string' ? v : '';
+}
+
+function getConfirmarReservaTemplateName(): string {
+  const v = getEnvVar('WHATSAPP_CONFIRMAR_RESERVA_TEMPLATE') || getEnvVar('WHATSAPP_TEMPLATE_NAME');
+  if (!v) return 'confirmar_reserva';
+  if (v === 'hello_world') return 'confirmar_reserva';
+  return v;
+}
+
+function normalizarTelefonoWhatsApp(telefono: string): string {
+  const n = String(telefono || '').replace(/\D/g, '');
+  if (!n) return '';
+  let t = n;
+  if (t.startsWith('0')) t = t.slice(1);
+  if (t.startsWith('54') && !t.startsWith('549')) {
+    t = '549' + t.slice(2);
+  } else if (!t.startsWith('54') && (t.length === 10 || t.length === 11)) {
+    t = '549' + t;
+  }
+  return t;
+}
+
+function buildToCandidates(telefonoRaw: string): string[] {
+  const digits = String(telefonoRaw || '').replace(/\D/g, '');
+  const candidates = [normalizarTelefonoWhatsApp(telefonoRaw), digits];
+  if (candidates[0]?.startsWith('549')) candidates.push('54' + candidates[0].slice(3));
+  if (digits.startsWith('54') && !digits.startsWith('549')) candidates.push('549' + digits.slice(2));
+  const seen = new Set<string>();
+  return candidates
+    .map((x) => String(x || '').trim())
+    .filter((x) => x && !seen.has(x) && (seen.add(x), true));
+}
+
+async function enviarTemplateConfirmarReserva(telefonoRaw: string): Promise<boolean> {
+  const token = getEnvVar('WHATSAPP_TOKEN');
+  const phoneNumberId = getEnvVar('PHONE_NUMBER_ID');
+  const templateName = getConfirmarReservaTemplateName();
+  const langCandidates = [
+    getEnvVar('WHATSAPP_TEMPLATE_LANG'),
+    'es_AR',
+    'es',
+    'es_ES',
+  ].filter(Boolean) as string[];
+  const seen = new Set<string>();
+  const langs = langCandidates.filter((l) => !seen.has(l) && (seen.add(l), true));
+  const toCandidates = buildToCandidates(telefonoRaw);
+
+  if (!token || !phoneNumberId) {
+    console.warn('[POST /api/reservas/temporal] WhatsApp envs faltantes para enviar template');
+    return false;
+  }
+
+  try {
+    for (const to of toCandidates) {
+      for (const templateLang of langs) {
+        const resp = await fetch(`https://graph.facebook.com/v18.0/${phoneNumberId}/messages`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            messaging_product: 'whatsapp',
+            to,
+            type: 'template',
+            template: {
+              name: templateName,
+              language: { code: templateLang },
+            },
+          }),
+        });
+
+        const body = await resp.text();
+        if (resp.ok) {
+          console.log('[POST /api/reservas/temporal] Template confirmar_reserva enviado', { to, templateName, templateLang });
+          return true;
+        }
+
+        console.error('[POST /api/reservas/temporal] Error enviando template confirmar_reserva', {
+          status: resp.status,
+          to,
+          templateName,
+          templateLang,
+          body,
+        });
+      }
+    }
+
+    return false;
+  } catch (e: any) {
+    console.error('[POST /api/reservas/temporal] Exception enviando template confirmar_reserva', e?.message || e);
+    return false;
+  }
+}
+
 export async function POST(request: NextRequest) {
   const envInfo = getEnvironmentInfo();
   console.log('[POST /api/reservas/temporal] Starting request', { environment: envInfo.environment });
@@ -236,6 +335,51 @@ export async function POST(request: NextRequest) {
       INSERT INTO reserva (usuario_id, clase_id, fecha_clase, es_reasignacion, created_at)
       VALUES (?, ?, ?, 1, datetime('now'))
     `).bind(usuarioIdNum, claseIdNum, fecha_clase).run();
+
+    // Si el alumno estaba en lista de espera para esa clase/fecha, eliminarlo y renumerar
+    try {
+      const enLista = await db.prepare(`
+        SELECT * FROM lista_espera
+        WHERE usuario_id = ? AND clase_id = ? AND fecha_clase = ?
+      `).bind(usuarioIdNum, claseIdNum, fecha_clase).first();
+
+      if (enLista) {
+        await db.prepare(`
+          DELETE FROM lista_espera
+          WHERE usuario_id = ? AND clase_id = ? AND fecha_clase = ?
+        `).bind(usuarioIdNum, claseIdNum, fecha_clase).run();
+
+        const listaRestante = await db.prepare(`
+          SELECT * FROM lista_espera
+          WHERE clase_id = ? AND fecha_clase = ?
+          ORDER BY numero ASC
+        `).bind(claseIdNum, fecha_clase).all();
+
+        const items = (listaRestante.results || []) as any[];
+        for (let i = 0; i < items.length; i++) {
+          await db.prepare(`
+            UPDATE lista_espera
+            SET numero = ?
+            WHERE usuario_id = ? AND clase_id = ? AND fecha_clase = ?
+          `).bind(i + 1, items[i].usuario_id, claseIdNum, fecha_clase).run();
+        }
+
+        // Enviar WhatsApp template de confirmación (sin parámetros)
+        const usuarioRow = await db.prepare('SELECT telefono FROM usuario WHERE id = ?').bind(usuarioIdNum).first();
+        const telefonoRaw = (usuarioRow as any)?.telefono ? String((usuarioRow as any).telefono) : '';
+        if (telefonoRaw) {
+          const ok = await enviarTemplateConfirmarReserva(telefonoRaw);
+          console.log('[POST /api/reservas/temporal] Resultado envío template (confirmado desde lista):', { ok, usuarioIdNum, claseIdNum, fecha_clase });
+        } else {
+          console.warn('[POST /api/reservas/temporal] No se pudo enviar template: teléfono vacío', { usuarioIdNum });
+        }
+      }
+    } catch (e: any) {
+      // No bloquear la operación principal si lista_espera no existe o hay otro error
+      if (!e?.message?.includes('no such table')) {
+        console.error('[POST /api/reservas/temporal] Error manejando lista_espera / template:', e?.message || e);
+      }
+    }
 
     console.log('[POST /api/reservas/temporal] Success', { usuarioIdNum, claseIdNum, fecha_clase });
     return NextResponse.json({ 

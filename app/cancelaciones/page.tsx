@@ -21,6 +21,7 @@ export default function CancelacionesPage() {
   const [cancelaciones, setCancelaciones] = useState<Cancelacion[]>([]);
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState(false);
+  const [undoingKey, setUndoingKey] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [showDebugButtons, setShowDebugButtons] = useState(false);
 
@@ -81,6 +82,43 @@ export default function CancelacionesPage() {
       alert(error.message || 'Error al anular cancelaciones');
     } finally {
       setDeleting(false);
+    }
+  };
+
+  const handleUndoCancelacion = async (c: Cancelacion) => {
+    const key = `${c.usuario_id}-${c.clase_id}-${c.fecha_clase}`;
+
+    if (!confirm(`¿Anular esta cancelación?\n\n${c.usuario_apellido || 'N/A'}, ${c.usuario_nombre || 'N/A'}\n${formatFechaClase(c.fecha_clase)}`)) {
+      return;
+    }
+
+    setUndoingKey(key);
+    try {
+      const qs = new URLSearchParams({
+        usuario_id: String(c.usuario_id),
+        clase_id: String(c.clase_id),
+        fecha_clase: String(c.fecha_clase),
+      });
+
+      const res = await fetchWithErrorHandling(`/api/cancelaciones?${qs.toString()}`, {
+        method: 'DELETE',
+      }, {
+        route: '/api/cancelaciones',
+        operation: 'undo_cancelacion_single'
+      });
+
+      const data = await res.json();
+
+      if (res.ok) {
+        // Optimista: actualizar estado local sin recargar toda la lista
+        setCancelaciones(prev => prev.filter(x => !(x.usuario_id === c.usuario_id && x.clase_id === c.clase_id && x.fecha_clase === c.fecha_clase)));
+      } else {
+        alert(data?.error || 'Error al anular la cancelación');
+      }
+    } catch (error: any) {
+      alert(error?.message || 'Error al anular la cancelación');
+    } finally {
+      setUndoingKey(null);
     }
   };
 
@@ -247,6 +285,9 @@ export default function CancelacionesPage() {
                     <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Tipo
                     </th>
+                    <th className="px-4 sm:px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Acciones
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
@@ -279,6 +320,16 @@ export default function CancelacionesPage() {
                         <span className="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-orange-100 text-orange-800">
                           Cancelación Fija
                         </span>
+                      </td>
+                      <td className="px-4 sm:px-6 py-4 whitespace-nowrap text-right">
+                        <button
+                          onClick={() => handleUndoCancelacion(cancelacion)}
+                          disabled={undoingKey === `${cancelacion.usuario_id}-${cancelacion.clase_id}-${cancelacion.fecha_clase}`}
+                          className="text-sm font-medium text-red-600 hover:text-red-700 disabled:opacity-50"
+                          title="Anular cancelación"
+                        >
+                          {undoingKey === `${cancelacion.usuario_id}-${cancelacion.clase_id}-${cancelacion.fecha_clase}` ? 'Anulando...' : 'Anular'}
+                        </button>
                       </td>
                     </tr>
                   ))}

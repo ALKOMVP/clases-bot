@@ -133,6 +133,9 @@ export function createErrorResponse(
   else if (errorMessage.includes('UNIQUE constraint') || 
            errorMessage.includes('constraint')) {
     statusCode = 400; // Bad Request
+    if (errorMessage.includes('FOREIGN KEY constraint failed')) {
+      userMessage = 'No se puede eliminar: el registro tiene datos asociados';
+    }
     if (errorMessage.includes('email')) {
       userMessage = 'El email ya existe';
     } else if (errorMessage.includes('reserva') || errorMessage.includes('clase')) {

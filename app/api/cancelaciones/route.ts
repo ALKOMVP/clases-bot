@@ -160,7 +160,60 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'Base de datos no disponible' }, { status: 503 });
     }
 
-    // Eliminar todas las cancelaciones
+    // Si vienen params, eliminar una cancelación específica (anular por fila)
+    const { searchParams } = new URL(request.url);
+    const usuarioId = searchParams.get('usuario_id');
+    const claseId = searchParams.get('clase_id');
+    const fechaClase = searchParams.get('fecha_clase');
+
+    const hasSingleDeleteParams = Boolean(usuarioId && claseId && fechaClase);
+    if (hasSingleDeleteParams) {
+      const usuarioIdNum = Number(usuarioId);
+      const claseIdNum = Number(claseId);
+      const fechaClaseStr = String(fechaClase);
+
+      if (!Number.isFinite(usuarioIdNum) || !Number.isFinite(claseIdNum) || !fechaClaseStr) {
+        return NextResponse.json({ error: 'Parámetros inválidos' }, { status: 400 });
+      }
+
+      // Seguridad: si ya hay una reserva temporal (reasignación) para esa clase/fecha,
+      // anular la cancelación puede sobrecargar el cupo. En ese caso, devolvemos 409.
+      try {
+        const conflicto = await db.prepare(`
+          SELECT usuario_id, clase_id, fecha_clase
+          FROM reserva
+          WHERE clase_id = ? AND fecha_clase = ? AND es_reasignacion = 1
+          LIMIT 1
+        `).bind(claseIdNum, fechaClaseStr).first();
+
+        if (conflicto) {
+          return NextResponse.json({
+            error: 'No se puede anular esta cancelación porque ya existe una reasignación temporal para esa clase/fecha. Primero anulá la reserva temporal asociada.'
+          }, { status: 409 });
+        }
+      } catch (e: any) {
+        // Si la tabla/columna no existe por alguna razón, no bloqueamos la anulación.
+        console.warn('[DELETE /api/cancelaciones] No se pudo chequear conflicto de reasignación temporal:', e?.message || e);
+      }
+
+      try {
+        const result = await db.prepare(`
+          DELETE FROM cancelacion
+          WHERE usuario_id = ? AND clase_id = ? AND fecha_clase = ?
+        `).bind(usuarioIdNum, claseIdNum, fechaClaseStr).run();
+
+        const deleted = result?.meta?.changes || 0;
+        console.log('[DELETE /api/cancelaciones] Single delete success', { usuario_id: usuarioIdNum, clase_id: claseIdNum, fecha_clase: fechaClaseStr, deleted });
+        return NextResponse.json({ deleted, success: true });
+      } catch (error: any) {
+        if (error.message && error.message.includes('no such table')) {
+          return NextResponse.json({ deleted: 0, success: true });
+        }
+        throw error;
+      }
+    }
+
+    // Eliminar todas las cancelaciones (modo debug)
     try {
       const result = await db.prepare('DELETE FROM cancelacion').run();
       const deleted = result.meta?.changes || 0;

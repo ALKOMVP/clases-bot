@@ -213,10 +213,38 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'ID requerido' }, { status: 400 });
     }
 
-    await db.prepare('DELETE FROM usuario WHERE id = ?').bind(id).run();
+    const usuarioIdNum = Number(id);
+    if (!Number.isFinite(usuarioIdNum) || usuarioIdNum <= 0) {
+      return NextResponse.json({ error: 'ID inválido' }, { status: 400 });
+    }
 
-    console.log('[DELETE /api/usuarios] Success', { id });
-    return NextResponse.json({ success: true });
+    // Borrado "en cascada" manual para evitar errores de FK (especialmente si foreign_keys no está activo)
+    const deleted: Record<string, number> = {};
+
+    const safeRun = async (label: string, sql: string, binds: any[] = []) => {
+      try {
+        const res = await db.prepare(sql).bind(...binds).run();
+        const changes = Number((res as any)?.meta?.changes || 0);
+        deleted[label] = (deleted[label] || 0) + changes;
+      } catch (e: any) {
+        // Ignorar si la tabla no existe (depende de migraciones aplicadas)
+        if (!e?.message?.includes('no such table')) {
+          console.error(`[DELETE /api/usuarios] Error en ${label}:`, e?.message || e);
+          throw e;
+        }
+      }
+    };
+
+    await safeRun('reserva', 'DELETE FROM reserva WHERE usuario_id = ?', [usuarioIdNum]);
+    await safeRun('cancelacion', 'DELETE FROM cancelacion WHERE usuario_id = ?', [usuarioIdNum]);
+    await safeRun('lista_espera', 'DELETE FROM lista_espera WHERE usuario_id = ?', [usuarioIdNum]);
+    await safeRun('clase_recuperar', 'DELETE FROM clase_recuperar WHERE usuario_id = ?', [usuarioIdNum]);
+    await safeRun('whatsapp_template_log', 'DELETE FROM whatsapp_template_log WHERE usuario_id = ?', [usuarioIdNum]);
+
+    await safeRun('usuario', 'DELETE FROM usuario WHERE id = ?', [usuarioIdNum]);
+
+    console.log('[DELETE /api/usuarios] Success', { id: usuarioIdNum, deleted });
+    return NextResponse.json({ success: true, deleted });
   } catch (error: any) {
     return createErrorResponse(
       error,

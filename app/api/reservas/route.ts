@@ -4,6 +4,205 @@ import { createErrorResponse, checkDatabaseAvailability, getEnvironmentInfo } fr
 
 // OpenNext no requiere runtime = 'edge' explícito
 
+// Configuración WhatsApp (para notificaciones proactivas)
+// Nota: en Cloudflare/OpenNext, los env vars suelen estar en process.env,
+// pero por seguridad también intentamos leerlos del contexto de Cloudflare.
+function getEnvVar(name: string): string {
+  const cf = (globalThis as any)[Symbol.for('__cloudflare-context__')];
+  const v = cf?.env?.[name] ?? (typeof process !== 'undefined' ? process.env?.[name] : undefined);
+  return typeof v === 'string' ? v : '';
+}
+
+function getConfirmarReservaTemplateName(): string {
+  // Preferimos un env específico para evitar pisadas (en prod ahora WHATSAPP_TEMPLATE_NAME está en hello_world).
+  const v =
+    getEnvVar('WHATSAPP_CONFIRMAR_RESERVA_TEMPLATE') ||
+    getEnvVar('WHATSAPP_TEMPLATE_NAME');
+  if (!v) return 'confirmar_reserva';
+  // Si está mal configurado en prod (ej: hello_world), forzar el correcto.
+  if (v === 'hello_world') return 'confirmar_reserva';
+  return v;
+}
+
+function normalizarTelefonoWhatsApp(telefono: string): string {
+  // Dejar solo dígitos
+  const n = String(telefono || '').replace(/\D/g, '');
+  if (!n) return '';
+
+  // Heurística AR (si el usuario guarda "011..." o "11...")
+  // Recomendación: guardar en DB el número ya en formato WhatsApp (ej: 54911xxxxxxx) para evitar ambigüedad.
+  let t = n;
+  if (t.startsWith('0')) t = t.slice(1); // 011... -> 11...
+  if (t.startsWith('54') && !t.startsWith('549')) {
+    // 54xxxxxxxx -> 549xxxxxxxx
+    t = '549' + t.slice(2);
+  } else if (!t.startsWith('54') && (t.length === 10 || t.length === 11)) {
+    // 11xxxxxxxx o 011xxxxxxxx -> 54911xxxxxxxx (aprox)
+    t = '549' + t;
+  }
+  return t;
+}
+
+function buildToCandidates(telefonoRaw: string): string[] {
+  const digits = String(telefonoRaw || '').replace(/\D/g, '');
+  const candidates = [normalizarTelefonoWhatsApp(telefonoRaw), digits];
+  // Variante: si vino "549..." también probar "54..." (por si el número real está sin el 9)
+  if (candidates[0]?.startsWith('549')) candidates.push('54' + candidates[0].slice(3));
+  // Variante: si vino "54..." también probar "549..."
+  if (digits.startsWith('54') && !digits.startsWith('549')) candidates.push('549' + digits.slice(2));
+  // dedupe y limpiar vacíos
+  const seen = new Set<string>();
+  return candidates
+    .map((x) => String(x || '').trim())
+    .filter((x) => x && !seen.has(x) && (seen.add(x), true));
+}
+
+function buildLangCandidates(): string[] {
+  const envLang = getEnvVar('WHATSAPP_TEMPLATE_LANG');
+  const candidates = [envLang, 'es_AR', 'es', 'es_ES'].filter(Boolean) as string[];
+  const seen = new Set<string>();
+  return candidates.filter((x) => !seen.has(x) && (seen.add(x), true));
+}
+
+async function ensureWhatsappTemplateLogTable(db: any) {
+  try {
+    await db.prepare('SELECT 1 FROM whatsapp_template_log LIMIT 1').first();
+    return;
+  } catch (e: any) {
+    if (!e?.message?.includes('no such table')) return;
+    await db.prepare(`
+      CREATE TABLE IF NOT EXISTS whatsapp_template_log (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        usuario_id INTEGER,
+        clase_id INTEGER,
+        fecha_clase TEXT,
+        telefono_raw TEXT,
+        to_num TEXT,
+        template_name TEXT,
+        template_lang TEXT,
+        http_status INTEGER,
+        ok INTEGER,
+        response_text TEXT
+      )
+    `).run();
+  }
+}
+
+async function enviarPlantillaConfirmarReserva(params: {
+  db: any;
+  usuarioId?: number;
+  claseId?: number;
+  fechaClase?: string;
+  telefonoRaw: string;
+}): Promise<boolean> {
+  const { db, usuarioId, claseId, fechaClase, telefonoRaw } = params;
+
+  const token = getEnvVar('WHATSAPP_TOKEN');
+  const phoneNumberId = getEnvVar('PHONE_NUMBER_ID');
+  const templateName = getConfirmarReservaTemplateName();
+
+  if (!token || !phoneNumberId) {
+    console.warn('[enviarPlantillaConfirmarReserva] WHATSAPP_TOKEN o PHONE_NUMBER_ID no configurados');
+    return false;
+  }
+
+  const url = `https://graph.facebook.com/v18.0/${phoneNumberId}/messages`;
+  const toCandidates = buildToCandidates(telefonoRaw);
+  const langCandidates = buildLangCandidates();
+
+  if (toCandidates.length === 0) {
+    console.warn('[enviarPlantillaConfirmarReserva] Teléfono vacío, no se puede enviar template');
+    return false;
+  }
+
+  // Requerimiento: enviar SIEMPRE sin parámetros (sin components)
+  try {
+    await ensureWhatsappTemplateLogTable(db);
+
+    for (const to of toCandidates) {
+      for (const templateLang of langCandidates) {
+        const payload = {
+          messaging_product: 'whatsapp',
+          to,
+          type: 'template',
+          template: {
+            name: templateName,
+            language: { code: templateLang },
+          },
+        };
+
+        const resp = await fetch(url, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(payload),
+        });
+
+        const bodyText = await resp.text();
+        if (resp.ok) {
+          console.log('[enviarPlantillaConfirmarReserva] OK', { to, templateName, templateLang });
+          try {
+            await db.prepare(`
+              INSERT INTO whatsapp_template_log
+              (usuario_id, clase_id, fecha_clase, telefono_raw, to_num, template_name, template_lang, http_status, ok, response_text)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
+            `).bind(
+              usuarioId ?? null,
+              claseId ?? null,
+              fechaClase ?? null,
+              telefonoRaw,
+              to,
+              templateName,
+              templateLang,
+              resp.status,
+              bodyText.slice(0, 900)
+            ).run();
+          } catch (logErr: any) {
+            console.error('[enviarPlantillaConfirmarReserva] Error guardando log (ok):', logErr?.message || logErr);
+          }
+          return true;
+        }
+
+        console.error('[enviarPlantillaConfirmarReserva] Error', {
+          status: resp.status,
+          to,
+          templateName,
+          templateLang,
+          body: bodyText,
+        });
+
+        try {
+          await db.prepare(`
+            INSERT INTO whatsapp_template_log
+            (usuario_id, clase_id, fecha_clase, telefono_raw, to_num, template_name, template_lang, http_status, ok, response_text)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?)
+          `).bind(
+            usuarioId ?? null,
+            claseId ?? null,
+            fechaClase ?? null,
+            telefonoRaw,
+            to,
+            templateName,
+            templateLang,
+            resp.status,
+            bodyText.slice(0, 900)
+          ).run();
+        } catch (logErr: any) {
+          console.error('[enviarPlantillaConfirmarReserva] Error guardando log (error):', logErr?.message || logErr);
+        }
+      }
+    }
+
+    return false;
+  } catch (e: any) {
+    console.error('[enviarPlantillaConfirmarReserva] Exception:', e?.message || e);
+    return false;
+  }
+}
+
 /**
  * Función auxiliar para promover el siguiente usuario de la lista de espera a reserva temporal confirmada
  * cuando hay cupo disponible para una fecha específica
@@ -92,6 +291,29 @@ async function promoverDeListaEspera(db: any, claseIdNum: number, fechaClase: st
             WHERE usuario_id = ? AND clase_id = ? AND fecha_clase = ?
           `).bind(siguienteUsuarioId, claseIdNum, fechaClase).run();
 
+          // Notificar por WhatsApp al alumno: su reserva quedó confirmada
+          try {
+            const usuario = await db.prepare('SELECT telefono FROM usuario WHERE id = ?')
+              .bind(siguienteUsuarioId)
+              .first();
+
+            const telefonoRaw = (usuario as any)?.telefono ? String((usuario as any).telefono) : '';
+            if (!telefonoRaw) {
+              console.warn('[promoverDeListaEspera] No se pudo notificar: teléfono vacío', { usuario_id: siguienteUsuarioId });
+            } else {
+              const ok = await enviarPlantillaConfirmarReserva({
+                db,
+                usuarioId: siguienteUsuarioId,
+                claseId: claseIdNum,
+                fechaClase,
+                telefonoRaw,
+              });
+              console.log('[promoverDeListaEspera] Resultado envío template (nuevo confirmado):', { ok, usuario_id: siguienteUsuarioId, clase_id: claseIdNum, fecha_clase: fechaClase });
+            }
+          } catch (e: any) {
+            console.error('[promoverDeListaEspera] Error notificando por WhatsApp:', e?.message || e);
+          }
+
           // Reordenar números de lista de espera (renumerar desde 1)
           const listaRestante = await db.prepare(`
             SELECT * FROM lista_espera
@@ -120,6 +342,29 @@ async function promoverDeListaEspera(db: any, claseIdNum: number, fechaClase: st
             DELETE FROM lista_espera
             WHERE usuario_id = ? AND clase_id = ? AND fecha_clase = ?
           `).bind(siguienteUsuarioId, claseIdNum, fechaClase).run();
+
+          // Requerimiento: si "por cualquier motivo" pasó a confirmado (ya existe reserva),
+          // también notificar con la plantilla.
+          try {
+            const usuario = await db.prepare('SELECT telefono FROM usuario WHERE id = ?')
+              .bind(siguienteUsuarioId)
+              .first();
+            const telefonoRaw = (usuario as any)?.telefono ? String((usuario as any).telefono) : '';
+            if (telefonoRaw) {
+              const ok = await enviarPlantillaConfirmarReserva({
+                db,
+                usuarioId: siguienteUsuarioId,
+                claseId: claseIdNum,
+                fechaClase,
+                telefonoRaw,
+              });
+              console.log('[promoverDeListaEspera] Resultado envío template (ya tenía reserva):', { ok, usuario_id: siguienteUsuarioId, clase_id: claseIdNum, fecha_clase: fechaClase });
+            } else {
+              console.warn('[promoverDeListaEspera] No se pudo notificar (reserva ya existente): teléfono vacío', { usuario_id: siguienteUsuarioId });
+            }
+          } catch (e: any) {
+            console.error('[promoverDeListaEspera] Error notificando (reserva ya existente):', e?.message || e);
+          }
         }
       } else {
         console.log(`[promoverDeListaEspera] No hay usuarios en lista de espera para ${fechaClase}`);
