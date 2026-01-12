@@ -149,12 +149,26 @@ export default function CancelacionesPage() {
   const formatCreatedAt = (createdAt: string | undefined) => {
     if (!createdAt) return '-';
     try {
-      return new Date(createdAt).toLocaleDateString('es-AR', {
+      // SQLite datetime('now') devuelve UTC sin indicador de zona horaria
+      // Agregamos 'Z' para indicar que es UTC, o si ya tiene zona horaria, lo usamos tal cual
+      let dateStr = createdAt.trim();
+      // Si no termina en Z ni tiene + o - (indicador de zona horaria), asumimos UTC
+      if (!dateStr.endsWith('Z') && !dateStr.includes('+') && !dateStr.includes('-', 10)) {
+        // Si tiene formato "YYYY-MM-DD HH:MM:SS", agregamos 'Z' para indicar UTC
+        if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(dateStr)) {
+          dateStr = dateStr + 'Z';
+        }
+      }
+      const date = new Date(dateStr);
+      // Convertir a hora local de Argentina (UTC-3)
+      return date.toLocaleString('es-AR', {
+        timeZone: 'America/Argentina/Buenos_Aires',
         day: 'numeric',
         month: 'short',
         year: 'numeric',
         hour: '2-digit',
-        minute: '2-digit'
+        minute: '2-digit',
+        hour12: true
       });
     } catch (error) {
       return createdAt;
