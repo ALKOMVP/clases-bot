@@ -408,10 +408,45 @@ export async function POST(request: NextRequest) {
     }
 
     // Crear reserva temporal
-    await db.prepare(`
+    const insertResult = await db.prepare(`
       INSERT INTO reserva (usuario_id, clase_id, fecha_clase, es_reasignacion, created_at)
       VALUES (?, ?, ?, 1, datetime('now'))
     `).bind(usuarioIdNum, claseIdNum, fecha_clase).run();
+    
+    console.log('[POST /api/reservas/temporal] ✅ Reserva temporal creada', {
+      usuarioIdNum,
+      claseIdNum,
+      fecha_clase,
+      changes: (insertResult as any)?.meta?.changes || 0
+    });
+    
+    // Verificar que la cancelación temporal fue eliminada (si existía)
+    const cancelacionVerificacion = await db.prepare(`
+      SELECT * FROM cancelacion
+      WHERE usuario_id = ? AND clase_id = ? AND fecha_clase = ?
+        AND (es_temporal = 1 OR es_temporal = true OR COALESCE(es_temporal, 0) = 1)
+    `).bind(usuarioIdNum, claseIdNum, fecha_clase).first();
+    
+    if (cancelacionVerificacion) {
+      console.warn('[POST /api/reservas/temporal] ⚠️ ADVERTENCIA: Cancelación temporal todavía existe después de intentar eliminarla', {
+        usuarioIdNum,
+        claseIdNum,
+        fecha_clase
+      });
+      // Intentar eliminar nuevamente
+      try {
+        await db.prepare(`
+          DELETE FROM cancelacion
+          WHERE usuario_id = ? AND clase_id = ? AND fecha_clase = ?
+            AND (es_temporal = 1 OR es_temporal = true OR COALESCE(es_temporal, 0) = 1)
+        `).bind(usuarioIdNum, claseIdNum, fecha_clase).run();
+        console.log('[POST /api/reservas/temporal] ✅ Cancelación temporal eliminada en segundo intento');
+      } catch (retryError: any) {
+        console.error('[POST /api/reservas/temporal] ❌ Error en segundo intento de eliminar cancelación:', retryError.message || retryError);
+      }
+    } else {
+      console.log('[POST /api/reservas/temporal] ✅ Verificación: No hay cancelación temporal (correcto)');
+    }
 
     // Si el alumno estaba en lista de espera para esa clase/fecha, eliminarlo y renumerar
     try {

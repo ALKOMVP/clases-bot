@@ -186,6 +186,7 @@ export default function CalendarioPage() {
     try {
       const url = `/api/reservas?include_reasignaciones=true&fecha_clase=${fechaClase}`;
       console.log('[loadReservasModal] 🔄 Cargando reservas con fecha específica (backend filtrará cancelaciones):', fechaClase);
+      console.log('[loadReservasModal] Estado actual de cancelaciones:', cancelaciones.length, 'cancelaciones en memoria');
 
       const res = await fetchWithErrorHandling(url, {}, {
         route: '/api/reservas',
@@ -194,6 +195,12 @@ export default function CalendarioPage() {
       const data = await res.json();
 
       if (Array.isArray(data)) {
+        console.log('[loadReservasModal] ✅ Reservas recibidas:', data.length, 'items');
+        console.log('[loadReservasModal] Temporales en respuesta:', data.filter((r: Reserva) => {
+          const esReasignacion = r.es_reasignacion === 1 || r.es_reasignacion === true || Number(r.es_reasignacion) === 1;
+          const tieneFecha = r.fecha_clase && r.fecha_clase !== 'null' && r.fecha_clase !== null && r.fecha_clase !== '';
+          return esReasignacion && tieneFecha && r.fecha_clase === fechaClase;
+        }).map((r: Reserva) => `${r.apellido}, ${r.nombre} (usuario_id: ${r.usuario_id})`));
         setReservasModal(data);
         return data;
       } else {
@@ -1092,7 +1099,12 @@ export default function CalendarioPage() {
           console.warn('⚠️ Error obteniendo diagnóstico después:', error);
         }
 
-        // Recargar todas las reservas para actualizar las cards
+        // PRIMERO: Recargar cancelaciones (CRÍTICO: el backend eliminó la cancelación temporal previa)
+        console.log('[handleAddTemporal] 🔄 Recargando cancelaciones (backend eliminó cancelación temporal previa)...');
+        await loadCancelaciones();
+        console.log('[handleAddTemporal] ✅ Cancelaciones recargadas');
+        
+        // SEGUNDO: Recargar todas las reservas para actualizar las cards
         await loadReservasAll();
         console.log('[handleAddTemporal] Todas las reservas recargadas para actualizar cards del calendario');
         
