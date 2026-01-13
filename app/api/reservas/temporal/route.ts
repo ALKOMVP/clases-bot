@@ -146,6 +146,26 @@ export async function POST(request: NextRequest) {
     const claseIdNum = typeof clase_id === 'string' ? parseInt(clase_id, 10) : clase_id;
     const usuarioIdNum = typeof usuario_id === 'string' ? parseInt(usuario_id, 10) : usuario_id;
 
+    // Limpiar inconsistencias: eliminar de lista_espera a usuarios que ya tienen reserva temporal confirmada
+    try {
+      await db.prepare(`
+        DELETE FROM lista_espera
+        WHERE EXISTS (
+          SELECT 1 FROM reserva r
+          WHERE r.usuario_id = lista_espera.usuario_id
+            AND r.clase_id = lista_espera.clase_id
+            AND r.fecha_clase = lista_espera.fecha_clase
+            AND r.es_reasignacion = 1
+        )
+        AND lista_espera.clase_id = ? AND lista_espera.fecha_clase = ?
+      `).bind(claseIdNum, fecha_clase).run();
+    } catch (error: any) {
+      // No es crítico si falla la limpieza
+      if (!error.message || !error.message.includes('no such table')) {
+        console.warn('[POST /api/reservas/temporal] Error en limpieza de inconsistencias (no crítico):', error.message || error);
+      }
+    }
+
     // Verificar que el usuario existe y está activo
     const usuario = await db.prepare('SELECT id, activo FROM usuario WHERE id = ?').bind(usuarioIdNum).first();
     

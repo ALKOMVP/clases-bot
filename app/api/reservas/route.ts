@@ -204,10 +204,57 @@ async function enviarPlantillaConfirmarReserva(params: {
 }
 
 /**
+ * Función auxiliar para limpiar inconsistencias: eliminar de lista_espera a usuarios
+ * que ya tienen reserva temporal confirmada para una fecha/clase específica
+ */
+async function limpiarListaEsperaInconsistencias(db: any, claseIdNum?: number, fechaClase?: string): Promise<number> {
+  try {
+    let query = `
+      DELETE FROM lista_espera
+      WHERE EXISTS (
+        SELECT 1 FROM reserva r
+        WHERE r.usuario_id = lista_espera.usuario_id
+          AND r.clase_id = lista_espera.clase_id
+          AND r.fecha_clase = lista_espera.fecha_clase
+          AND r.es_reasignacion = 1
+      )
+    `;
+    const params: any[] = [];
+
+    if (claseIdNum && fechaClase) {
+      query += ' AND lista_espera.clase_id = ? AND lista_espera.fecha_clase = ?';
+      params.push(claseIdNum, fechaClase);
+    }
+
+    const result = await db.prepare(query).bind(...params).run();
+    const deleted = (result as any)?.changes || 0;
+
+    if (deleted > 0) {
+      console.log(`[limpiarListaEsperaInconsistencias] ✅ Eliminados ${deleted} registros inconsistentes de lista_espera`, {
+        claseIdNum,
+        fechaClase
+      });
+    }
+
+    return deleted;
+  } catch (error: any) {
+    // Si la tabla no existe, no es un error crítico
+    if (error.message && error.message.includes('no such table')) {
+      console.log('[limpiarListaEsperaInconsistencias] Tabla lista_espera no existe, no hay nada que limpiar');
+      return 0;
+    }
+    console.error('[limpiarListaEsperaInconsistencias] Error:', error.message || error);
+    return 0;
+  }
+}
+
+/**
  * Función auxiliar para promover el siguiente usuario de la lista de espera a reserva temporal confirmada
  * cuando hay cupo disponible para una fecha específica
  */
 async function promoverDeListaEspera(db: any, claseIdNum: number, fechaClase: string): Promise<void> {
+  // Primero limpiar inconsistencias para esta fecha/clase
+  await limpiarListaEsperaInconsistencias(db, claseIdNum, fechaClase);
   try {
     // Verificar cupo actual para esta fecha
     const reservasFijasQuery = await db.prepare(`
@@ -416,6 +463,20 @@ export async function GET(request: NextRequest) {
 
     const fecha_clase = searchParams.get('fecha_clase');
     const include_reasignaciones = searchParams.get('include_reasignaciones') === 'true';
+
+    // Limpiar inconsistencias: eliminar de lista_espera a usuarios que ya tienen reserva temporal confirmada
+    // Esto corrige casos donde un usuario tiene reserva temporal pero también está en lista_espera
+    try {
+      if (fecha_clase && clase_id) {
+        await limpiarListaEsperaInconsistencias(db, Number(clase_id), fecha_clase);
+      } else {
+        // Si no hay filtros específicos, limpiar todas las inconsistencias
+        await limpiarListaEsperaInconsistencias(db);
+      }
+    } catch (error: any) {
+      // No es crítico si falla la limpieza, continuar con la consulta
+      console.warn('[GET /api/reservas] Error en limpieza de inconsistencias (no crítico):', error.message || error);
+    }
 
     let query = `
       SELECT r.*, u.nombre, u.apellido, u.telefono, c.dia, c.hora, c.nombre as clase_nombre
