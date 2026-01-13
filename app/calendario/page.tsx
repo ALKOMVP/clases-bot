@@ -440,48 +440,39 @@ export default function CalendarioPage() {
           .filter(c => c.dia === diaClase)
           .map(clase => {
             const claseId = Number(clase.id);
-            const reservasClase: Reserva[] = [];
 
             // Obtener reservas fijas para esta clase (sin fecha específica) usando índice
             const reservasFijasKey = `fija_${claseId}`;
-            const reservasFijas = reservasIndex.get(reservasFijasKey) || [];
+            const reservasFijasRaw = reservasIndex.get(reservasFijasKey) || [];
             
             // Obtener reservas temporales para esta clase y fecha usando índice
             const reservasTemporalesKey = `temporal_${claseId}_${fechaStr}`;
-            const reservasTemporales = reservasIndex.get(reservasTemporalesKey) || [];
+            const reservasTemporalesRaw = reservasIndex.get(reservasTemporalesKey) || [];
 
             // Filtrar cancelaciones usando el índice (O(1) en lugar de O(n))
-            for (const r of reservasFijas) {
+            // Mantener fijas y temporales separados para evitar filtros redundantes
+            const reservasFijasFiltradas: Reserva[] = [];
+            for (const r of reservasFijasRaw) {
               const cancelKey = `${r.usuario_id}_${claseId}_${fechaStr}`;
               if (!cancelacionesIndex.has(cancelKey)) {
-                reservasClase.push(r);
+                reservasFijasFiltradas.push(r);
               }
             }
 
-            for (const r of reservasTemporales) {
+            const reservasTemporalesFiltradas: Reserva[] = [];
+            for (const r of reservasTemporalesRaw) {
               const cancelKey = `${r.usuario_id}_${claseId}_${fechaStr}`;
               if (!cancelacionesIndex.has(cancelKey)) {
-                reservasClase.push(r);
+                reservasTemporalesFiltradas.push(r);
               }
             }
 
-            // Eliminar duplicados por usuario_id (priorizar temporales sobre fijas)
-            const reservasTemporalesPrimero = reservasClase.filter(r => {
-              const esReasignacion = r.es_reasignacion === 1 || r.es_reasignacion === true || Number(r.es_reasignacion) === 1;
-              const tieneFecha = r.fecha_clase && r.fecha_clase !== 'null' && r.fecha_clase !== null && r.fecha_clase !== '';
-              return tieneFecha && esReasignacion && r.fecha_clase === fechaStr;
-            });
-            const reservasFijasUnicas = reservasClase.filter(r => {
-              const esReasignacion = r.es_reasignacion === 1 || r.es_reasignacion === true || Number(r.es_reasignacion) === 1;
-              const tieneFecha = r.fecha_clase && r.fecha_clase !== 'null' && r.fecha_clase !== null && r.fecha_clase !== '';
-              return !tieneFecha || !esReasignacion;
-            });
-            
-            // Primero agregar temporales, luego fijas (excluyendo usuarios que ya tienen temporal)
-            const usuariosConTemporal = new Set(reservasTemporalesPrimero.map(r => r.usuario_id));
+            // Combinar: primero temporales, luego fijas (excluyendo usuarios que ya tienen temporal)
+            // Esto evita los filtros redundantes que se hacían antes
+            const usuariosConTemporal = new Set(reservasTemporalesFiltradas.map(r => r.usuario_id));
             const reservasUnicas = [
-              ...reservasTemporalesPrimero,
-              ...reservasFijasUnicas.filter(r => !usuariosConTemporal.has(r.usuario_id))
+              ...reservasTemporalesFiltradas,
+              ...reservasFijasFiltradas.filter(r => !usuariosConTemporal.has(r.usuario_id))
             ];
 
             return {
