@@ -381,6 +381,32 @@ export async function POST(request: NextRequest) {
     }
 
     // Cupo disponible: crear reserva temporal (SOLO si NO está en lista de espera)
+    // IMPORTANTE: Si existe una cancelación temporal previa para este usuario/clase/fecha,
+    // eliminarla porque el usuario se está re-inscribiendo
+    try {
+      const cancelacionTemporal = await db.prepare(`
+        SELECT * FROM cancelacion
+        WHERE usuario_id = ? AND clase_id = ? AND fecha_clase = ?
+          AND (es_temporal = 1 OR es_temporal = true OR COALESCE(es_temporal, 0) = 1)
+      `).bind(usuarioIdNum, claseIdNum, fecha_clase).first();
+      
+      if (cancelacionTemporal) {
+        await db.prepare(`
+          DELETE FROM cancelacion
+          WHERE usuario_id = ? AND clase_id = ? AND fecha_clase = ?
+            AND (es_temporal = 1 OR es_temporal = true OR COALESCE(es_temporal, 0) = 1)
+        `).bind(usuarioIdNum, claseIdNum, fecha_clase).run();
+        console.log('[POST /api/reservas/temporal] ✅ Cancelación temporal previa eliminada al re-inscribir usuario', {
+          usuarioIdNum,
+          claseIdNum,
+          fecha_clase
+        });
+      }
+    } catch (cancelError: any) {
+      // No es crítico si falla, continuar con la creación de la reserva
+      console.warn('[POST /api/reservas/temporal] Error eliminando cancelación temporal previa (no crítico):', cancelError.message || cancelError);
+    }
+
     // Crear reserva temporal
     await db.prepare(`
       INSERT INTO reserva (usuario_id, clase_id, fecha_clase, es_reasignacion, created_at)
