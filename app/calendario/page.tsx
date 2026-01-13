@@ -406,10 +406,25 @@ export default function CalendarioPage() {
           .filter(c => c.dia === diaClase)
           .map(clase => {
             const reservasClase = reservasAll.filter(r => {
-              if (r.clase_id !== clase.id) return false;
+              if (Number(r.clase_id) !== Number(clase.id)) return false;
               
-              const esFija = !r.fecha_clase || r.fecha_clase === 'null' || r.fecha_clase === null;
-              const esTemporal = r.fecha_clase && r.fecha_clase !== 'null' && r.fecha_clase !== null && r.fecha_clase === fechaStr;
+              const esFija = !r.fecha_clase || r.fecha_clase === 'null' || r.fecha_clase === null || r.fecha_clase === '';
+              const esTemporal = r.fecha_clase && r.fecha_clase !== 'null' && r.fecha_clase !== null && r.fecha_clase !== '' && r.fecha_clase === fechaStr;
+              
+              // Debug para jueves 22 de enero 19:00
+              if (fechaStr === '2026-01-22' && clase.hora === '19:00' && Number(r.clase_id) === Number(clase.id)) {
+                console.log('[Card Debug] Reserva en reservasAll:', {
+                  usuario_id: r.usuario_id,
+                  nombre: `${r.apellido}, ${r.nombre}`,
+                  clase_id: r.clase_id,
+                  fecha_clase: r.fecha_clase,
+                  es_reasignacion: r.es_reasignacion,
+                  esFija,
+                  esTemporal,
+                  fechaStr,
+                  incluida: esFija || esTemporal
+                });
+              }
               
               return esFija || esTemporal;
             });
@@ -439,22 +454,35 @@ export default function CalendarioPage() {
                 if (cancelada) return false;
               }
 
-              // Excluir si hay una reasignación temporal para esta fecha y el usuario ya está en lista de espera
-              if (esReasignacion && tieneFecha) {
-                const usuarioEnListaEspera = listaEspera.some(le => Number(le.usuario_id) === Number(r.usuario_id));
-                if (usuarioEnListaEspera) return false;
-              }
+              // NO excluir reservas temporales confirmadas aunque haya usuarios en lista de espera
+              // Si una reserva temporal existe, significa que está confirmada y NO está en lista de espera
+              // La lista de espera solo contiene usuarios que NO tienen reserva temporal confirmada
+              // Por lo tanto, si encontramos una reserva temporal, debe incluirse siempre (ya verificamos cancelaciones arriba)
 
               return true;
             });
 
             // Eliminar duplicados por usuario_id
+            // IMPORTANTE: Si un usuario tiene reserva temporal, NO debería tener también reserva fija para la misma clase
+            // Pero por seguridad, priorizamos temporales sobre fijas si ambas existen
             const seen = new Set<number>();
-            const reservasUnicas = reservasFiltradas.filter(r => {
-              if (seen.has(r.usuario_id)) return false;
-              seen.add(r.usuario_id);
-              return true;
+            const reservasTemporalesPrimero = reservasFiltradas.filter(r => {
+              const esReasignacion = r.es_reasignacion === 1 || r.es_reasignacion === true || Number(r.es_reasignacion) === 1;
+              const tieneFecha = r.fecha_clase && r.fecha_clase !== 'null' && r.fecha_clase !== null && r.fecha_clase !== '';
+              return tieneFecha && esReasignacion && r.fecha_clase === fechaStr;
             });
+            const reservasFijas = reservasFiltradas.filter(r => {
+              const esReasignacion = r.es_reasignacion === 1 || r.es_reasignacion === true || Number(r.es_reasignacion) === 1;
+              const tieneFecha = r.fecha_clase && r.fecha_clase !== 'null' && r.fecha_clase !== null && r.fecha_clase !== '';
+              return !tieneFecha || !esReasignacion;
+            });
+            
+            // Primero agregar temporales, luego fijas (excluyendo usuarios que ya tienen temporal)
+            const usuariosConTemporal = new Set(reservasTemporalesPrimero.map(r => r.usuario_id));
+            const reservasUnicas = [
+              ...reservasTemporalesPrimero,
+              ...reservasFijas.filter(r => !usuariosConTemporal.has(r.usuario_id))
+            ];
 
             return {
               clase,
@@ -1274,11 +1302,41 @@ export default function CalendarioPage() {
                           );
                           return !tieneCancelacion;
                         });
-                        const reservasTemporales = c.reservas.filter(r => {
+                        // Calcular temporales desde reservasAll directamente para esta clase y fecha
+                        // Esto asegura que usemos los datos más actualizados, no solo c.reservas
+                        const temporalesDesdeAll = reservasAll.filter(r => {
+                          if (Number(r.clase_id) !== Number(c.clase.id)) return false;
                           const esReasignacion = r.es_reasignacion === 1 || r.es_reasignacion === true || Number(r.es_reasignacion) === 1;
-                          const tieneFecha = r.fecha_clase && r.fecha_clase !== 'null' && r.fecha_clase !== null;
-                          return tieneFecha && esReasignacion && r.fecha_clase === fechaStr;
+                          const tieneFecha = r.fecha_clase && r.fecha_clase !== 'null' && r.fecha_clase !== null && r.fecha_clase !== '';
+                          const fechaCoincide = tieneFecha && r.fecha_clase === fechaStr;
+                          const esTemporal = fechaCoincide && esReasignacion;
+                          
+                          // Verificar que no esté cancelada
+                          if (esTemporal) {
+                            const cancelada = cancelaciones.some(cancel => 
+                              Number(cancel.usuario_id) === Number(r.usuario_id) && 
+                              Number(cancel.clase_id) === Number(r.clase_id) && 
+                              cancel.fecha_clase === fechaStr
+                            );
+                            if (cancelada) return false;
+                          }
+                          
+                          return esTemporal;
                         });
+                        
+                        // También verificar en c.reservas por si acaso
+                        const temporalesDesdeC = c.reservas.filter(r => {
+                          const esReasignacion = r.es_reasignacion === 1 || r.es_reasignacion === true || Number(r.es_reasignacion) === 1;
+                          const tieneFecha = r.fecha_clase && r.fecha_clase !== 'null' && r.fecha_clase !== null && r.fecha_clase !== '';
+                          const fechaCoincide = tieneFecha && r.fecha_clase === fechaStr;
+                          return fechaCoincide && esReasignacion;
+                        });
+                        
+                        // Usar la unión de ambos para asegurar que no se pierda ningún temporal
+                        const todosLosTemporales = [...temporalesDesdeAll, ...temporalesDesdeC];
+                        const reservasTemporales = todosLosTemporales.filter((r, idx, self) => 
+                          idx === self.findIndex(t => t.usuario_id === r.usuario_id)
+                        );
                         const key = `${c.clase.id}-${fechaStr}`;
                         const listaEsperaCount = listaEsperaCounts.get(key) || 0;
                         const tieneTemporales = reservasTemporales.length > 0 || listaEsperaCount > 0;
