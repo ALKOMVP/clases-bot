@@ -37,6 +37,7 @@ interface Cancelacion {
   usuario_id: number;
   clase_id: number;
   fecha_clase: string;
+  es_temporal?: number | boolean;
 }
 
 interface ListaEsperaItem {
