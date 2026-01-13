@@ -12,10 +12,10 @@ const WHATSAPP_TEMPLATE_NAME = process.env.WHATSAPP_TEMPLATE_NAME || '';
 
 // Reglas de cancelación:
 // - Se puede cancelar mientras NO haya pasado la hora de la clase
-// - Se puede cancelar hasta 2 horas antes del inicio
+// - Se puede cancelar hasta 1 hora antes del inicio
 // Nota: interpretamos horarios como hora local Argentina (UTC-3), y comparamos contra Date.now() (UTC).
 const ARG_UTC_OFFSET_HOURS = 3; // ART = UTC-3 => para convertir ART -> UTC sumamos 3 horas
-const CANCELACION_ANTICIPACION_MINUTOS = 120;
+const CANCELACION_ANTICIPACION_MINUTOS = 60;
 
 function claseStartUtcMs(fechaISO: string, horaHHMM: string): number | null {
   try {
@@ -774,7 +774,7 @@ async function handleCancelar(db: any, usuarioId: number, from: string) {
       PHONE_NUMBER_ID,
       WHATSAPP_TOKEN,
       from,
-      '📅 No tienes clases cancelables en este momento.\n\n⚠️ Recordá: podés cancelar hasta 2 horas antes del inicio de la clase.'
+      '📅 No tienes clases cancelables en este momento.\n\n⚠️ Recordá: podés cancelar hasta 1 hora antes del inicio de la clase.'
     );
     return;
   }
@@ -860,7 +860,7 @@ async function procesarCancelacion(db: any, usuarioId: number, claseId: number, 
     // Validar ventana de cancelación: hasta 1 hora antes del inicio
     const horaClase = (clase as any)?.hora ? String((clase as any).hora) : '';
     if (!esCancelable(fechaClase, horaClase)) {
-      return { success: false, message: 'Solo podés cancelar hasta 2 horas antes del inicio de la clase.' };
+      return { success: false, message: 'Solo podés cancelar hasta 1 hora antes del inicio de la clase.' };
     }
     
     if (esTemporal) {
