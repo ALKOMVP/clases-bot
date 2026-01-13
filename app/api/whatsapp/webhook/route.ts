@@ -1090,12 +1090,18 @@ export async function POST(request: NextRequest) {
 
             // Reutilizar la lógica del endpoint temporal (simplificada)
             try {
-              // Evitar duplicados (fijo o temporal en esa fecha)
+              // Evitar duplicados (fijo o temporal en esa fecha) EXCLUYENDO las canceladas
               const existente = await db.prepare(`
-                SELECT * FROM reserva
-                WHERE usuario_id = ? AND clase_id = ?
-                  AND (fecha_clase IS NULL OR fecha_clase = 'null' OR fecha_clase = '' OR fecha_clase = ?)
-              `).bind(usuario.id, claseId, fechaClase).first();
+                SELECT r.* FROM reserva r
+                WHERE r.usuario_id = ? AND r.clase_id = ?
+                  AND (r.fecha_clase IS NULL OR r.fecha_clase = 'null' OR r.fecha_clase = '' OR r.fecha_clase = ?)
+                  AND NOT EXISTS (
+                    SELECT 1 FROM cancelacion c
+                    WHERE c.usuario_id = r.usuario_id
+                      AND c.clase_id = r.clase_id
+                      AND c.fecha_clase = ?
+                  )
+              `).bind(usuario.id, claseId, fechaClase, fechaClase).first();
 
               if (existente) {
                 await enviarMensajeTexto(
