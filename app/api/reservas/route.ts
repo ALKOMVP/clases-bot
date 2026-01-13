@@ -391,6 +391,33 @@ async function verificarYPromoverAutomaticamente(db: any, claseIdNum: number, fe
         VALUES (?, ?, ?, 1, datetime('now'))
       `).bind(siguienteUsuarioId, claseIdNum, fechaClase).run();
 
+      // IMPORTANTE: Consumir 1 clase a recuperar si el usuario tiene disponibles
+      // (similar a como se hace en el webhook cuando se reserva usando clase para recuperar)
+      try {
+        const recuperar = await db.prepare(`
+          SELECT id FROM clase_recuperar
+          WHERE usuario_id = ? AND usado = 0 AND fecha_vencimiento >= date('now')
+          ORDER BY fecha_vencimiento ASC, id ASC
+          LIMIT 1
+        `).bind(siguienteUsuarioId).first();
+
+        if (recuperar?.id) {
+          await db.prepare(`
+            UPDATE clase_recuperar
+            SET usado = 1, fecha_uso = date('now')
+            WHERE id = ?
+          `).bind(recuperar.id).run();
+          console.log(`[verificarYPromoverAutomaticamente] ✅ Clase para recuperar consumida para usuario ${siguienteUsuarioId}`, {
+            clase_recuperar_id: recuperar.id
+          });
+        }
+      } catch (recuperarError: any) {
+        // No es crítico si falla, solo loguear
+        if (!recuperarError?.message?.includes('no such table')) {
+          console.warn('[verificarYPromoverAutomaticamente] Error consumiendo clase para recuperar (no crítico):', recuperarError.message || recuperarError);
+        }
+      }
+
       // Eliminar de lista de espera
       await db.prepare(`
         DELETE FROM lista_espera
@@ -541,6 +568,35 @@ async function promoverDeListaEspera(db: any, claseIdNum: number, fechaClase: st
             clase_id: claseIdNum,
             fecha_clase: fechaClase
           });
+
+          // IMPORTANTE: Consumir 1 clase a recuperar si el usuario tiene disponibles
+          // (similar a como se hace en el webhook cuando se reserva usando clase para recuperar)
+          try {
+            const recuperar = await db.prepare(`
+              SELECT id FROM clase_recuperar
+              WHERE usuario_id = ? AND usado = 0 AND fecha_vencimiento >= date('now')
+              ORDER BY fecha_vencimiento ASC, id ASC
+              LIMIT 1
+            `).bind(siguienteUsuarioId).first();
+
+            if (recuperar?.id) {
+              await db.prepare(`
+                UPDATE clase_recuperar
+                SET usado = 1, fecha_uso = date('now')
+                WHERE id = ?
+              `).bind(recuperar.id).run();
+              console.log(`[promoverDeListaEspera] ✅ Clase para recuperar consumida para usuario ${siguienteUsuarioId}`, {
+                clase_recuperar_id: recuperar.id
+              });
+            } else {
+              console.log(`[promoverDeListaEspera] ℹ️ Usuario ${siguienteUsuarioId} no tiene clases para recuperar disponibles`);
+            }
+          } catch (recuperarError: any) {
+            // No es crítico si falla, solo loguear
+            if (!recuperarError?.message?.includes('no such table')) {
+              console.warn('[promoverDeListaEspera] Error consumiendo clase para recuperar (no crítico):', recuperarError.message || recuperarError);
+            }
+          }
 
           // Eliminar de lista de espera
           await db.prepare(`
