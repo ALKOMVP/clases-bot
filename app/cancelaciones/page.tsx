@@ -116,8 +116,16 @@ export default function CancelacionesPage() {
       const data = await res.json();
 
       if (res.ok) {
-        // Optimista: actualizar estado local sin recargar toda la lista
-        setCancelaciones(prev => prev.filter(x => !(x.usuario_id === c.usuario_id && x.clase_id === c.clase_id && x.fecha_clase === c.fecha_clase)));
+        // Si es cancelación temporal, la reserva temporal fue recreada en el backend
+        // Recargar la lista de cancelaciones para reflejar el cambio
+        await loadCancelaciones();
+        
+        // Mostrar mensaje de éxito
+        if (c.es_temporal === 1 || c.es_temporal === true) {
+          alert(`✅ Cancelación temporal anulada. La reserva temporal ha sido recreada automáticamente.`);
+        } else {
+          alert(`✅ Cancelación anulada exitosamente.`);
+        }
       } else {
         alert(data?.error || 'Error al anular la cancelación');
       }

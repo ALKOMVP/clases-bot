@@ -12,7 +12,17 @@
                 FOREIGN KEY (usuario_id) REFERENCES usuario(id) ON DELETE CASCADE,
                 FOREIGN KEY (clase_id) REFERENCES clase(id) ON DELETE CASCADE
               )
-            `).run();try{await b.prepare("ALTER TABLE lista_espera ADD COLUMN numero INTEGER DEFAULT 0").run()}catch(a){a.message&&a.message.includes("duplicate column")||console.warn("[GET /api/reservas/lista-espera] Error al agregar columna numero (puede que ya exista):",a.message)}}catch(a){return console.error("[GET /api/reservas/lista-espera] Error al crear tabla:",a.message),u.NextResponse.json([])}}}let a=`
+            `).run();try{await b.prepare("ALTER TABLE lista_espera ADD COLUMN numero INTEGER DEFAULT 0").run()}catch(a){a.message&&a.message.includes("duplicate column")||console.warn("[GET /api/reservas/lista-espera] Error al agregar columna numero (puede que ya exista):",a.message)}}catch(a){return console.error("[GET /api/reservas/lista-espera] Error al crear tabla:",a.message),u.NextResponse.json([])}}}try{await b.prepare(`
+          DELETE FROM lista_espera
+          WHERE EXISTS (
+            SELECT 1 FROM reserva r
+            WHERE r.usuario_id = lista_espera.usuario_id
+              AND r.clase_id = lista_espera.clase_id
+              AND r.fecha_clase = lista_espera.fecha_clase
+              AND r.es_reasignacion = 1
+          )
+          AND lista_espera.clase_id = ? AND lista_espera.fecha_clase = ?
+        `).bind(e,f).run()}catch(a){a.message?.includes("no such table")||console.warn("[GET /api/reservas/lista-espera] Error en limpieza (no cr\xedtico):",a.message||a)}let a=`
         SELECT le.*, u.nombre, u.apellido
         FROM lista_espera le
         JOIN usuario u ON le.usuario_id = u.id
