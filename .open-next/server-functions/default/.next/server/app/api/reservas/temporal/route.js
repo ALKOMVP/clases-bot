@@ -21,18 +21,36 @@
             AND c.fecha_clase = ?
         )
     `).bind(i,h).first(),n=m?.count||0,o=await c.prepare(`
-      SELECT COUNT(DISTINCT usuario_id) as count
-      FROM reserva
-      WHERE clase_id = ? AND fecha_clase = ? AND es_reasignacion = 1
-    `).bind(i,h).first(),p=o?.count||0;try{let a=await c.prepare(`
+      SELECT COUNT(DISTINCT r.usuario_id) as count
+      FROM reserva r
+      WHERE r.clase_id = ? 
+        AND r.fecha_clase = ? 
+        AND r.es_reasignacion = 1
+        AND NOT EXISTS (
+          SELECT 1 FROM cancelacion c
+          WHERE c.usuario_id = r.usuario_id 
+            AND c.clase_id = r.clase_id 
+            AND c.fecha_clase = r.fecha_clase
+        )
+    `).bind(i,h).first(),p=o?.count||0;console.log("[POST /api/reservas/temporal] Conteo de capacidad:",{countFijas:n,countTemporales:p,totalConfirmados:n+p,cupoMaximo:35,hayEspacio:n+p<35});try{let a=await c.prepare(`
         SELECT COUNT(*) as count
         FROM lista_espera
         WHERE clase_id = ? AND fecha_clase = ?
       `).bind(g,h).first();a?.count}catch(a){console.log("[POST /api/reservas/temporal] Tabla lista_espera no existe, continuando")}let q=await c.prepare(`
-      SELECT * FROM reserva 
-      WHERE usuario_id = ? AND clase_id = ? 
-        AND (fecha_clase IS NULL OR fecha_clase = 'null' OR fecha_clase = '' OR fecha_clase = ?)
-    `).bind(j,i,h).first();if(q){if(!q.fecha_clase||"null"===q.fecha_clase||""===q.fecha_clase)return u.NextResponse.json({error:"El alumno ya est\xe1 inscrito como alumno fijo en esta clase",code:"YA_ES_FIJO"},{status:400});if(q.fecha_clase===h)return u.NextResponse.json({error:"El alumno ya est\xe1 inscrito como temporal para esta fecha",code:"YA_ES_TEMPORAL"},{status:400})}if(n+p>=35)try{if(await c.prepare(`
+      SELECT r.* FROM reserva r
+      WHERE r.usuario_id = ? AND r.clase_id = ? 
+        AND (r.fecha_clase IS NULL OR r.fecha_clase = 'null' OR r.fecha_clase = '' OR r.fecha_clase = ?)
+        AND NOT EXISTS (
+          SELECT 1 FROM cancelacion c
+          WHERE c.usuario_id = r.usuario_id
+            AND c.clase_id = r.clase_id
+            AND c.fecha_clase = ?
+        )
+    `).bind(j,i,h,h).first(),r=await c.prepare(`
+      SELECT * FROM cancelacion
+      WHERE usuario_id = ? AND clase_id = ? AND fecha_clase = ?
+        AND (es_temporal = 1 OR es_temporal = true OR COALESCE(es_temporal, 0) = 1)
+    `).bind(j,i,h).first();if(console.log("[POST /api/reservas/temporal] Verificaci\xf3n de reserva existente:",{usuarioIdNum:j,claseIdNum:i,fecha_clase:h,existingReserva:q?{id:q.id,fecha_clase:q.fecha_clase,es_reasignacion:q.es_reasignacion}:null,cancelacionTemporalCheck:r?{usuario_id:r.usuario_id,clase_id:r.clase_id,fecha_clase:r.fecha_clase,es_temporal:r.es_temporal}:null}),q)if(r)console.log("[POST /api/reservas/temporal] ⚠️ Reserva existe pero tiene cancelaci\xf3n temporal - permitiendo re-inscripci\xf3n");else{if(!q.fecha_clase||"null"===q.fecha_clase||""===q.fecha_clase)return u.NextResponse.json({error:"El alumno ya est\xe1 inscrito como alumno fijo en esta clase",code:"YA_ES_FIJO"},{status:400});if(q.fecha_clase===h)return u.NextResponse.json({error:"El alumno ya est\xe1 inscrito como temporal para esta fecha",code:"YA_ES_TEMPORAL"},{status:400})}if(n+p>=35)try{if(await c.prepare(`
           SELECT * FROM lista_espera
           WHERE usuario_id = ? AND clase_id = ? AND fecha_clase = ?
         `).bind(j,i,h).first())return u.NextResponse.json({success:!0,enListaEspera:!0,mensaje:"El alumno ya est\xe1 en la lista de espera."});{let a=await c.prepare(`
@@ -41,10 +59,26 @@
           `).bind(i,h).first(),b=(a?.max_num||0)+1;return await c.prepare(`
             INSERT INTO lista_espera (usuario_id, clase_id, fecha_clase, numero, created_at)
             VALUES (?, ?, ?, ?, datetime('now'))
-          `).bind(j,i,h,b).run(),console.log("[POST /api/reservas/temporal] Success - Agregado a lista de espera",{usuarioIdNum:j,claseIdNum:i,fecha_clase:h,numero:b}),u.NextResponse.json({success:!0,enListaEspera:!0,mensaje:`Cupo completo. El alumno ha sido agregado a la lista de espera (posici\xf3n ${b}).`})}}catch(a){return console.error("[POST /api/reservas/temporal] Error al agregar a lista_espera:",a.message),u.NextResponse.json({error:"Error al agregar a lista de espera. El cupo est\xe1 completo.",code:"ERROR_LISTA_ESPERA",enListaEspera:!0,details:a.message},{status:500})}await c.prepare(`
+          `).bind(j,i,h,b).run(),console.log("[POST /api/reservas/temporal] Success - Agregado a lista de espera",{usuarioIdNum:j,claseIdNum:i,fecha_clase:h,numero:b}),u.NextResponse.json({success:!0,enListaEspera:!0,mensaje:`Cupo completo. El alumno ha sido agregado a la lista de espera (posici\xf3n ${b}).`})}}catch(a){return console.error("[POST /api/reservas/temporal] Error al agregar a lista_espera:",a.message),u.NextResponse.json({error:"Error al agregar a lista de espera. El cupo est\xe1 completo.",code:"ERROR_LISTA_ESPERA",enListaEspera:!0,details:a.message},{status:500})}try{await c.prepare(`
+        SELECT * FROM cancelacion
+        WHERE usuario_id = ? AND clase_id = ? AND fecha_clase = ?
+          AND (es_temporal = 1 OR es_temporal = true OR COALESCE(es_temporal, 0) = 1)
+      `).bind(j,i,h).first()&&(await c.prepare(`
+          DELETE FROM cancelacion
+          WHERE usuario_id = ? AND clase_id = ? AND fecha_clase = ?
+            AND (es_temporal = 1 OR es_temporal = true OR COALESCE(es_temporal, 0) = 1)
+        `).bind(j,i,h).run(),console.log("[POST /api/reservas/temporal] ✅ Cancelaci\xf3n temporal previa eliminada al re-inscribir usuario",{usuarioIdNum:j,claseIdNum:i,fecha_clase:h}))}catch(a){console.warn("[POST /api/reservas/temporal] Error eliminando cancelaci\xf3n temporal previa (no cr\xedtico):",a.message||a)}let s=await c.prepare(`
       INSERT INTO reserva (usuario_id, clase_id, fecha_clase, es_reasignacion, created_at)
       VALUES (?, ?, ?, 1, datetime('now'))
-    `).bind(j,i,h).run();try{if(await c.prepare(`
+    `).bind(j,i,h).run();if(console.log("[POST /api/reservas/temporal] ✅ Reserva temporal creada",{usuarioIdNum:j,claseIdNum:i,fecha_clase:h,changes:s?.meta?.changes||0}),await c.prepare(`
+      SELECT * FROM cancelacion
+      WHERE usuario_id = ? AND clase_id = ? AND fecha_clase = ?
+        AND (es_temporal = 1 OR es_temporal = true OR COALESCE(es_temporal, 0) = 1)
+    `).bind(j,i,h).first()){console.warn("[POST /api/reservas/temporal] ⚠️ ADVERTENCIA: Cancelaci\xf3n temporal todav\xeda existe despu\xe9s de intentar eliminarla",{usuarioIdNum:j,claseIdNum:i,fecha_clase:h});try{await c.prepare(`
+          DELETE FROM cancelacion
+          WHERE usuario_id = ? AND clase_id = ? AND fecha_clase = ?
+            AND (es_temporal = 1 OR es_temporal = true OR COALESCE(es_temporal, 0) = 1)
+        `).bind(j,i,h).run(),console.log("[POST /api/reservas/temporal] ✅ Cancelaci\xf3n temporal eliminada en segundo intento")}catch(a){console.error("[POST /api/reservas/temporal] ❌ Error en segundo intento de eliminar cancelaci\xf3n:",a.message||a)}}else console.log("[POST /api/reservas/temporal] ✅ Verificaci\xf3n: No hay cancelaci\xf3n temporal (correcto)");try{if(await c.prepare(`
         SELECT * FROM lista_espera
         WHERE usuario_id = ? AND clase_id = ? AND fecha_clase = ?
       `).bind(j,i,h).first()){await c.prepare(`

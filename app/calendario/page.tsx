@@ -153,8 +153,9 @@ export default function CalendarioPage() {
       });
       const data = await res.json();
       
-      // Después de cargar reservas, recargar lista de espera para asegurar consistencia
-      await loadListaEsperaCounts();
+      // OPTIMIZACIÓN: Cargar lista de espera de forma lazy (solo cuando se necesita)
+      // No cargar automáticamente para mejorar rendimiento inicial
+      // Se cargará cuando se abra un modal o cuando se necesite
 
       if (Array.isArray(data)) {
         console.log('[loadReservasAll] ✅ Reservas cargadas:', {
@@ -218,19 +219,21 @@ export default function CalendarioPage() {
   const loadListaEsperaCounts = async () => {
     if (clases.length === 0) return;
 
-    // Generar todas las fechas del calendario (próximos 30 días)
+    // OPTIMIZACIÓN: Solo cargar combinaciones para fechas que realmente tienen reservas temporales
+    // o que están en el calendario visible (próximos 30 días)
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const fechaSet = new Set<string>();
     
-    // Incluir fechas de reservas temporales existentes
+    // Incluir fechas de reservas temporales existentes (solo estas necesitan conteo de lista de espera)
     reservasAll.forEach(r => {
       if (r.fecha_clase && r.fecha_clase !== 'null' && r.fecha_clase !== null) {
         fechaSet.add(r.fecha_clase);
       }
     });
 
-    // Generar fechas para los próximos 30 días que corresponden a días de clases
+    // Solo generar fechas para los próximos 30 días que corresponden a días de clases
+    // y que tienen reservas temporales o están próximas
     const diaMap: { [key: number]: string } = { 1: 'Lun', 2: 'Mar', 4: 'Jue', 6: 'Sab' };
     for (let i = 0; i < 30; i++) {
       const fecha = new Date(today);
@@ -241,7 +244,7 @@ export default function CalendarioPage() {
       }
     }
 
-    // Construir array de combinaciones para el endpoint batch
+    // Construir array de combinaciones SOLO para las clases y fechas relevantes
     const combinaciones: Array<{ clase_id: number; fecha_clase: string }> = [];
     clases.forEach(clase => {
       fechaSet.forEach(fecha => {
@@ -510,6 +513,57 @@ export default function CalendarioPage() {
     return calendar;
   }, [clases, reservasIndex, cancelacionesIndex, refreshCounter]);
 
+  // Cargar lista de espera counts de forma lazy cuando se renderizan las cards
+  useEffect(() => {
+    if (loading || calendarData.length === 0) return;
+
+    // Obtener todas las combinaciones clase-fecha que se están mostrando
+    const combinacionesFaltantes: Array<{ clase_id: number; fecha_clase: string }> = [];
+
+    calendarData.forEach(item => {
+      item.clases.forEach(c => {
+        const fechaStr = c.fecha.toISOString().split('T')[0];
+        const key = `${c.clase.id}-${fechaStr}`;
+        if (!listaEsperaCounts.has(key)) {
+          combinacionesFaltantes.push({ clase_id: c.clase.id, fecha_clase: fechaStr });
+        }
+      });
+    });
+
+    // Solo cargar las que faltan, en batches para no sobrecargar
+    if (combinacionesFaltantes.length > 0) {
+      const batchSize = 20;
+      const batches: Array<Array<{ clase_id: number; fecha_clase: string }>> = [];
+      for (let i = 0; i < combinacionesFaltantes.length; i += batchSize) {
+        batches.push(combinacionesFaltantes.slice(i, i + batchSize));
+      }
+
+      // Cargar batches con delay progresivo para no sobrecargar
+      batches.forEach((batch, idx) => {
+        setTimeout(() => {
+          fetch('/api/reservas/lista-espera-counts', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ combinaciones: batch })
+          })
+            .then(res => res.json())
+            .then(data => {
+              if (data.counts && typeof data.counts === 'object') {
+                setListaEsperaCounts(prev => {
+                  const newCounts = new Map(prev);
+                  Object.entries(data.counts).forEach(([k, v]) => {
+                    newCounts.set(k, Number(v) || 0);
+                  });
+                  return newCounts;
+                });
+              }
+            })
+            .catch(err => console.warn('[Lazy load lista espera] Error:', err));
+        }, idx * 200); // Delay progresivo para no sobrecargar
+      });
+    }
+  }, [calendarData, listaEsperaCounts, loading]);
+
   const handleCloseModal = () => {
     setListaEspera([]);
     setSearchAlumnoTemporal('');
@@ -525,7 +579,33 @@ export default function CalendarioPage() {
     setShowModal(true);
     const fechaStr = fecha.toISOString().split('T')[0];
     
-    // Primero recargar reservas (esto ejecutará la limpieza automática en el backend)
+    // Cargar lista de espera counts para esta fecha específica (lazy loading)
+    const fechaKey = `${clase.id}-${fechaStr}`;
+    if (!listaEsperaCounts.has(fechaKey)) {
+      // Cargar solo para esta combinación clase-fecha
+      try {
+        const res = await fetchWithErrorHandling('/api/reservas/lista-espera-counts', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ combinaciones: [{ clase_id: clase.id, fecha_clase: fechaStr }] })
+        }, {
+          route: '/api/reservas/lista-espera-counts',
+          operation: 'load_lista_espera_counts_lazy'
+        });
+        const data = await res.json();
+        if (data.counts && typeof data.counts === 'object') {
+          const newCounts = new Map(listaEsperaCounts);
+          Object.entries(data.counts).forEach(([key, value]) => {
+            newCounts.set(key, Number(value) || 0);
+          });
+          setListaEsperaCounts(newCounts);
+        }
+      } catch (error) {
+        console.warn('[handleClaseClick] Error cargando lista de espera count (no crítico):', error);
+      }
+    }
+    
+    // Primero recargar reservas (esto ejecutará la limpieza y promoción automática en el backend para esta fecha)
     await loadReservasModal(fechaStr);
     
     // Esperar un momento para que la limpieza se complete
@@ -1257,6 +1337,38 @@ export default function CalendarioPage() {
     }
   };
 
+  const handleCleanupInconsistencias = async () => {
+    if (!confirm('¿Limpiar inconsistencias de lista de espera? Esto eliminará usuarios que están en lista de espera pero ya tienen reserva temporal confirmada.')) return;
+
+    setProcessing(true);
+    try {
+      const res = await fetchWithErrorHandling(
+        '/api/reservas?action=cleanup_inconsistencias',
+        {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' }
+        },
+        {
+          route: '/api/reservas',
+          operation: 'cleanup_inconsistencias'
+        }
+      );
+      const data = await res.json();
+      if (res.ok) {
+        alert(data.message || `Se eliminaron ${data.deleted || 0} registros inconsistentes`);
+        // Recargar datos después de la limpieza
+        await loadReservasAll();
+        await loadListaEsperaCounts();
+      } else {
+        alert(data.error || 'Error al limpiar inconsistencias');
+      }
+    } catch (error: any) {
+      alert(error.message || 'Error al limpiar inconsistencias');
+    } finally {
+      setProcessing(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 overflow-x-hidden">
       <Navbar />
@@ -1283,6 +1395,13 @@ export default function CalendarioPage() {
                 className="bg-red-600 text-white px-3 sm:px-4 py-2 rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 text-sm sm:text-base w-full sm:w-auto"
               >
                 {clearingReservas ? 'Borrando...' : '🗑️ Borrar Todas las Reservas'}
+              </button>
+              <button
+                onClick={handleCleanupInconsistencias}
+                disabled={generatingReservas || clearingReservas || processing}
+                className="bg-blue-600 text-white px-3 sm:px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 text-sm sm:text-base w-full sm:w-auto"
+              >
+                {processing ? 'Limpiando...' : '🧹 Limpiar Inconsistencias Lista Espera'}
               </button>
             </div>
           )}
@@ -1346,8 +1465,10 @@ export default function CalendarioPage() {
                         });
                         
                         const key = `${c.clase.id}-${fechaStr}`;
-                        const listaEsperaCount = listaEsperaCounts.get(key) || 0;
-                        const tieneTemporales = reservasTemporales.length > 0 || listaEsperaCount > 0;
+                        const listaEsperaCount = listaEsperaCounts.get(key);
+                        // Mostrar "calculando..." solo si hay temporales pero no tenemos el count aún
+                        const tieneTemporales = reservasTemporales.length > 0 || (listaEsperaCount !== undefined && listaEsperaCount > 0);
+                        const isCalculando = reservasTemporales.length > 0 && listaEsperaCount === undefined;
 
                         return (
                           <button
@@ -1383,7 +1504,7 @@ export default function CalendarioPage() {
                             <div className="text-sm text-gray-600 mb-2">{c.clase.hora}</div>
                             <div className="text-xs text-gray-500 space-y-1">
                               <div>
-                                {isAutoFixing ? (
+                                {isAutoFixing || isCalculando ? (
                                   <div className="inline-flex items-center gap-2">
                                     <div className="h-4 w-16 bg-gray-200 rounded animate-pulse"></div>
                                     <span className="text-gray-400">calculando...</span>
@@ -1394,7 +1515,7 @@ export default function CalendarioPage() {
                                   </>
                                 )}
                               </div>
-                              {isAutoFixing ? (
+                              {isAutoFixing || isCalculando ? (
                                 <div className="h-3 w-24 bg-gray-200 rounded animate-pulse"></div>
                               ) : (
                                 <>

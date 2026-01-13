@@ -52,9 +52,15 @@
             AND c.fecha_clase = ?
         )
     `).bind(b,c).first(),h=g?.count||0,i=await a.prepare(`
-      SELECT COUNT(DISTINCT usuario_id) as count
-      FROM reserva
-      WHERE clase_id = ? AND fecha_clase = ? AND es_reasignacion = 1
+      SELECT COUNT(DISTINCT r.usuario_id) as count
+      FROM reserva r
+      WHERE r.clase_id = ? AND r.fecha_clase = ? AND r.es_reasignacion = 1
+        AND NOT EXISTS (
+          SELECT 1 FROM cancelacion c
+          WHERE c.usuario_id = r.usuario_id 
+            AND c.clase_id = r.clase_id 
+            AND c.fecha_clase = r.fecha_clase
+        )
     `).bind(b,c).first(),j=h+(i?.count||0),k=35-j;if(k<=0){console.log(`[verificarYPromoverAutomaticamente] No hay cupo disponible para ${c}`,{totalConfirmados:j,cupoMaximo:35,cupoDisponible:k});break}let l=await a.prepare(`
       SELECT * FROM lista_espera
       WHERE clase_id = ? AND fecha_clase = ?
@@ -69,7 +75,16 @@
       `).bind(m,b,c).run(),console.log(`[verificarYPromoverAutomaticamente] ⚠️ Usuario ya ten\xeda reserva, eliminado de lista de espera`);else{await a.prepare(`
         INSERT INTO reserva (usuario_id, clase_id, fecha_clase, es_reasignacion, created_at)
         VALUES (?, ?, ?, 1, datetime('now'))
-      `).bind(m,b,c).run(),await a.prepare(`
+      `).bind(m,b,c).run();try{let b=await a.prepare(`
+          SELECT id FROM clase_recuperar
+          WHERE usuario_id = ? AND usado = 0 AND fecha_vencimiento >= date('now')
+          ORDER BY fecha_vencimiento ASC, id ASC
+          LIMIT 1
+        `).bind(m).first();b?.id&&(await a.prepare(`
+            UPDATE clase_recuperar
+            SET usado = 1, fecha_uso = date('now')
+            WHERE id = ?
+          `).bind(b.id).run(),console.log(`[verificarYPromoverAutomaticamente] ✅ Clase para recuperar consumida para usuario ${m}`,{clase_recuperar_id:b.id}))}catch(a){a?.message?.includes("no such table")||console.warn("[verificarYPromoverAutomaticamente] Error consumiendo clase para recuperar (no cr\xedtico):",a.message||a)}await a.prepare(`
         DELETE FROM lista_espera
         WHERE usuario_id = ? AND clase_id = ? AND fecha_clase = ?
       `).bind(m,b,c).run();let e=(await a.prepare(`
@@ -93,9 +108,15 @@
             AND c.fecha_clase = ?
         )
     `).bind(b,c).first(),e=d?.count||0,f=await a.prepare(`
-      SELECT COUNT(DISTINCT usuario_id) as count
-      FROM reserva
-      WHERE clase_id = ? AND fecha_clase = ? AND es_reasignacion = 1
+      SELECT COUNT(DISTINCT r.usuario_id) as count
+      FROM reserva r
+      WHERE r.clase_id = ? AND r.fecha_clase = ? AND r.es_reasignacion = 1
+        AND NOT EXISTS (
+          SELECT 1 FROM cancelacion c
+          WHERE c.usuario_id = r.usuario_id 
+            AND c.clase_id = r.clase_id 
+            AND c.fecha_clase = r.fecha_clase
+        )
     `).bind(b,c).first(),g=f?.count||0,h=e+g,i=35-h;if(console.log(`[promoverDeListaEspera] Cupo para fecha ${c}:`,{countFijas:e,countTemporales:g,totalConfirmados:h,cupoDisponible:i,cupoMaximo:35}),i>0){let d=await a.prepare(`
         SELECT * FROM lista_espera
         WHERE clase_id = ? AND fecha_clase = ?
@@ -110,7 +131,16 @@
           `).bind(e,b,c).run();try{let d=await a.prepare("SELECT telefono FROM usuario WHERE id = ?").bind(e).first(),f=d?.telefono?String(d.telefono):"";if(f){let d=await z({db:a,usuarioId:e,claseId:b,fechaClase:c,telefonoRaw:f});console.log("[promoverDeListaEspera] Resultado env\xedo template (ya ten\xeda reserva):",{ok:d,usuario_id:e,clase_id:b,fecha_clase:c})}else console.warn("[promoverDeListaEspera] No se pudo notificar (reserva ya existente): tel\xe9fono vac\xedo",{usuario_id:e})}catch(a){console.error("[promoverDeListaEspera] Error notificando (reserva ya existente):",a?.message||a)}}else{await a.prepare(`
             INSERT INTO reserva (usuario_id, clase_id, fecha_clase, es_reasignacion, created_at)
             VALUES (?, ?, ?, 1, datetime('now'))
-          `).bind(e,b,c).run(),console.log(`[promoverDeListaEspera] ✅ Reserva temporal creada para ${c}`,{usuario_id:e,clase_id:b,fecha_clase:c}),await a.prepare(`
+          `).bind(e,b,c).run(),console.log(`[promoverDeListaEspera] ✅ Reserva temporal creada para ${c}`,{usuario_id:e,clase_id:b,fecha_clase:c});try{let b=await a.prepare(`
+              SELECT id FROM clase_recuperar
+              WHERE usuario_id = ? AND usado = 0 AND fecha_vencimiento >= date('now')
+              ORDER BY fecha_vencimiento ASC, id ASC
+              LIMIT 1
+            `).bind(e).first();b?.id?(await a.prepare(`
+                UPDATE clase_recuperar
+                SET usado = 1, fecha_uso = date('now')
+                WHERE id = ?
+              `).bind(b.id).run(),console.log(`[promoverDeListaEspera] ✅ Clase para recuperar consumida para usuario ${e}`,{clase_recuperar_id:b.id})):console.log(`[promoverDeListaEspera] ℹ️ Usuario ${e} no tiene clases para recuperar disponibles`)}catch(a){a?.message?.includes("no such table")||console.warn("[promoverDeListaEspera] Error consumiendo clase para recuperar (no cr\xedtico):",a.message||a)}await a.prepare(`
             DELETE FROM lista_espera
             WHERE usuario_id = ? AND clase_id = ? AND fecha_clase = ?
           `).bind(e,b,c).run();try{let d=await a.prepare("SELECT telefono FROM usuario WHERE id = ?").bind(e).first(),f=d?.telefono?String(d.telefono):"";if(f){let d=await z({db:a,usuarioId:e,claseId:b,fechaClase:c,telefonoRaw:f});console.log("[promoverDeListaEspera] Resultado env\xedo template (nuevo confirmado):",{ok:d,usuario_id:e,clase_id:b,fecha_clase:c})}else console.warn("[promoverDeListaEspera] No se pudo notificar: tel\xe9fono vac\xedo",{usuario_id:e})}catch(a){console.error("[promoverDeListaEspera] Error notificando por WhatsApp:",a?.message||a)}let d=(await a.prepare(`
@@ -132,8 +162,6 @@
         WHERE c.usuario_id = r.usuario_id 
           AND c.clase_id = r.clase_id 
           AND c.fecha_clase = ?
-          AND (r.fecha_clase IS NULL OR r.fecha_clase = 'null' OR r.fecha_clase = '')
-          AND (r.es_reasignacion IS NULL OR r.es_reasignacion = 0 OR r.es_reasignacion = '0')
       )`),k.push(g)):h||j.push("(r.fecha_clase IS NULL OR r.fecha_clase = 'null' OR r.fecha_clase = '' OR r.es_reasignacion = 0 OR r.es_reasignacion IS NULL)"),j.length>0&&(i+=" AND "+j.join(" AND "));let l={Lun:1,Mar:2,Jue:3,Sab:4};i+=" ORDER BY c.dia, c.hora, u.apellido, u.nombre";let m=[];try{let a=b.prepare(i);m=(k.length>0?await a.bind(...k).all():await a.all()).results||[]}catch(a){console.error("[GET /api/reservas] Error ejecutando query:",a),m=[]}return m.sort((a,b)=>{let c=l[a.dia]||99,d=l[b.dia]||99;return c!==d?c-d:a.hora.localeCompare(b.hora)}),console.log("[GET /api/reservas] Success",{count:m.length}),u.NextResponse.json(m)}catch(a){return(0,w.WX)(a,"Error al obtener reservas",{route:"/api/reservas",method:"GET",operation:"fetch_reservas"})}}async function E(a){console.log("[POST /api/reservas] Starting request",{environment:(0,w.cR)().environment});try{let b=null,c=globalThis[Symbol.for("__cloudflare-context__")];if(c?.env?.DB&&(b=c.env.DB,console.log("[POST /api/reservas] DB obtained from Cloudflare context (OpenNext)")),!b)return console.error("[POST /api/reservas] DB not available in production"),u.NextResponse.json({error:"Base de datos no disponible",details:"El binding de D1 no est\xe1 configurado correctamente"},{status:503});if(!b)return u.NextResponse.json({error:"Base de datos no disponible"},{status:503});let{usuario_id:d,clase_id:e}=await a.json();if(!d||!e)return u.NextResponse.json({error:"Faltan campos requeridos"},{status:400});let f=await b.prepare("SELECT id, activo FROM usuario WHERE id = ?").bind(d).first();if(!f)return u.NextResponse.json({error:"El alumno no existe",code:"USUARIO_NO_EXISTE"},{status:400});if(!f.activo||0===f.activo)return u.NextResponse.json({error:"No se pueden inscribir alumnos desactivados a clases",code:"USUARIO_DESACTIVADO"},{status:400});if(await b.prepare("SELECT * FROM reserva WHERE usuario_id = ? AND clase_id = ?").bind(d,e).first())return u.NextResponse.json({error:"El alumno ya est\xe1 inscrito en esta clase",code:"ALREADY_ENROLLED"},{status:400});return await b.prepare("INSERT INTO reserva (usuario_id, clase_id) VALUES (?, ?)").bind(d,e).run(),console.log("[POST /api/reservas] Success",{usuario_id:d,clase_id:e}),u.NextResponse.json({success:!0})}catch(a){return(0,w.WX)(a,"Error al crear reserva",{route:"/api/reservas",method:"POST",operation:"create_reserva"})}}async function F(a){console.log("[DELETE /api/reservas] Starting request",{environment:(0,w.cR)().environment});try{let b=null,c=globalThis[Symbol.for("__cloudflare-context__")];if(c?.env?.DB&&(b=c.env.DB,console.log("[DELETE /api/reservas] DB obtained from Cloudflare context (OpenNext)")),!b&&"undefined"!=typeof process&&process.env.DB&&(b=process.env.DB,console.log("[DELETE /api/reservas] DB obtained from process.env.DB (OpenNext fallback)")),b||(b=(0,v.O)(),console.log("[DELETE /api/reservas] Using mock DB as fallback")),!b)return u.NextResponse.json({error:"Base de datos no disponible"},{status:503});let{searchParams:d}=new URL(a.url),e=d.get("usuario_id"),f=d.get("clase_id"),g=d.get("fecha_clase");if(!e||!f)return u.NextResponse.json({error:"Usuario ID y Clase ID requeridos"},{status:400});let h="string"==typeof f?parseInt(f,10):f,i=g;if(g){if(await b.prepare(`
         SELECT * FROM reserva 
         WHERE usuario_id = ? AND clase_id = ? AND fecha_clase = ? AND es_reasignacion = 1

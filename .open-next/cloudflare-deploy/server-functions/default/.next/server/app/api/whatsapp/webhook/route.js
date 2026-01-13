@@ -51,6 +51,12 @@
       AND r.es_reasignacion = 1
       AND r.fecha_clase IS NOT NULL AND r.fecha_clase != '' AND r.fecha_clase != 'null'
       AND date(r.fecha_clase) >= date('now')
+      AND NOT EXISTS (
+        SELECT 1 FROM cancelacion c
+        WHERE c.usuario_id = r.usuario_id 
+          AND c.clase_id = r.clase_id 
+          AND c.fecha_clase = r.fecha_clase
+      )
     ORDER BY r.fecha_clase ASC, c.hora ASC
   `).bind(b).all();for(let a of d?.results||[]){let b=String(a.fecha_clase||""),d=String(a.hora||"");b&&d&&z(b,d)&&c.push({fecha:new Date(b),clase:a,reserva:a,esTemporal:!0})}for(let d of(await F(a,b)))z(d.fecha.toISOString().split("T")[0],d.clase?.hora||"")&&c.push({fecha:d.fecha,clase:d.clase,reserva:d.reserva,esTemporal:!1});c.sort((a,b)=>{let c=a.fecha.getTime()-b.fecha.getTime();return 0!==c?c:String(a.clase?.hora||"").localeCompare(String(b.clase?.hora||""))});let e=new Set,f=[];for(let a of c){let b=Number(a.reserva?.clase_id??a.clase?.clase_id??a.clase?.id),c=a.fecha.toISOString().split("T")[0],d=`${b}_${c}`;if(!e.has(d)&&(e.add(d),f.push(a),f.length>=3))break}return f}function H(a,b){let c=["Domingo","Lunes","Martes","Mi\xe9rcoles","Jueves","Viernes","S\xe1bado"][a.getDay()],d=a.getDate(),e=["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"][a.getMonth()];return`${c} ${b} - ${d} de ${e}`}async function I(a,b,c,d){try{let e=await fetch(`https://graph.facebook.com/v18.0/${a}/messages`,{method:"POST",headers:{Authorization:`Bearer ${b}`,"Content-Type":"application/json"},body:JSON.stringify({messaging_product:"whatsapp",to:c,type:"text",text:{body:d}})});if(!e.ok){let a=await e.text();return console.error("[enviarMensajeTexto] Error:",a),!1}return!0}catch(a){return console.error("[enviarMensajeTexto] Error:",a),!1}}async function J(a,b,c,d,e){try{let f=await fetch(`https://graph.facebook.com/v18.0/${a}/messages`,{method:"POST",headers:{Authorization:`Bearer ${b}`,"Content-Type":"application/json"},body:JSON.stringify({messaging_product:"whatsapp",to:c,type:"interactive",interactive:{type:"button",body:{text:d},action:{buttons:e.map(a=>({type:"reply",reply:{id:a.id,title:a.title}}))}}})});if(!f.ok){let a=await f.text();return console.error("[enviarMensajeConBotones] Error:",a),!1}return!0}catch(a){return console.error("[enviarMensajeConBotones] Error:",a),!1}}async function K(a,b,c,d,e,f){try{let g=await fetch(`https://graph.facebook.com/v18.0/${a}/messages`,{method:"POST",headers:{Authorization:`Bearer ${b}`,"Content-Type":"application/json"},body:JSON.stringify({messaging_product:"whatsapp",to:c,type:"interactive",interactive:{type:"list",body:{text:d},action:{button:e,sections:f}}})});if(!g.ok){let a=await g.text();return console.error("[enviarMensajeConLista] Error:",a),!1}return!0}catch(a){return console.error("[enviarMensajeConLista] Error:",a),!1}}async function L(a,b){try{let c=await a.prepare(`
       SELECT COUNT(*) as total
@@ -123,10 +129,16 @@ Selecciona una clase:`;await K(w,v,c,k,"Ver clases",[{title:"Clases",rows:j}])}a
     `).bind(b).first(),n=m?.total||0,o=new Date(d),p=H(o,h.hora);return{success:!0,message:"Cancelaci\xf3n registrada exitosamente",fechaFormateada:p,totalClasesRecuperar:n}}catch(a){return console.error("[procesarCancelacion] Error:",a),{success:!1,message:a.message||"Error al procesar cancelaci\xf3n"}}}async function R(a){let b=a.nextUrl.searchParams,c=b.get("hub.mode"),d=b.get("hub.verify_token"),e=b.get("hub.challenge");return"subscribe"===c&&d===x?(console.log("[GET /api/whatsapp/webhook] Webhook verificado"),new u.NextResponse(e,{status:200})):new u.NextResponse("Forbidden",{status:403})}async function S(a){try{let b=null;try{let a=globalThis[Symbol.for("__cloudflare-context__")];a?.env?.DB&&(b=a.env.DB)}catch(a){}if(b||(b=function(a){if("undefined"!=typeof process&&process.env.DB)return process.env.DB;try{let a=globalThis[Symbol.for("__cloudflare-context__")];if(a?.env?.DB)return a.env.DB}catch(a){}return null}()),!b)return console.error("[POST /api/whatsapp/webhook] DB not available"),u.NextResponse.json({error:"Database not available"},{status:503});let c=await a.json();console.log("[POST /api/whatsapp/webhook] Received:",JSON.stringify(c,null,2));let d=c.entry?.[0],e=d?.changes?.[0],f=e?.value;if(!f)return u.NextResponse.json({received:!0});for(let a of f.messages||[]){let c=a.from,d=a.type,e=a.id;console.log("[POST /api/whatsapp/webhook] Processing message:",{from:c,messageType:d,messageId:e});let f=await E(b,c);if(!f){await I(w,v,c,"❌ No est\xe1s registrado en el sistema. Por favor, contacta a la administraci\xf3n.");continue}if("text"===d){let d=a.text?.body?.toLowerCase().trim()||"";d.includes("ver")&&(d.includes("clase")||d.includes("clases"))?await N(b,f.id,c):d.includes("agendar")||d.includes("inscribir")||d.includes("reservar")?await O(b,f.id,c):d.includes("cancelar")||d.includes("cancel")?await P(b,f.id,c):await J(w,v,c,`\xa1Hola ${f.nombre}! 👋
 
 \xbfEn qu\xe9 te puedo ayudar?`,[{id:"cancelar",title:"❌ Cancelar clase"},{id:"reservar",title:"✅ Reservar clase"},{id:"ver_clases",title:"\uD83D\uDCC5 Ver mis clases"}])}else if("interactive"===d){let d=a.interactive,e=d?.button_reply?.id||d?.list_reply?.id;if("ver_clases"===e)await N(b,f.id,c);else if("cancelar"===e)await P(b,f.id,c);else if("reservar"===e)await O(b,f.id,c);else if(e?.startsWith("ver_mas_clases_")){let a=parseInt(e.split("_").pop()||"0",10)||0;await O(b,f.id,c,a)}else if(e?.startsWith("reservar_")){let a=e.split("_");if(3===a.length){let d=parseInt(a[1],10),e=a[2];if(await L(b,f.id)<=0){await I(w,v,c,"❌ No tienes clases a recuperar disponibles.");continue}try{if(await b.prepare(`
-                SELECT * FROM reserva
-                WHERE usuario_id = ? AND clase_id = ?
-                  AND (fecha_clase IS NULL OR fecha_clase = 'null' OR fecha_clase = '' OR fecha_clase = ?)
-              `).bind(f.id,d,e).first()){await I(w,v,c,"⚠️ Ya est\xe1s inscripto en esa clase.");continue}let a=await b.prepare(`
+                SELECT r.* FROM reserva r
+                WHERE r.usuario_id = ? AND r.clase_id = ?
+                  AND (r.fecha_clase IS NULL OR r.fecha_clase = 'null' OR r.fecha_clase = '' OR r.fecha_clase = ?)
+                  AND NOT EXISTS (
+                    SELECT 1 FROM cancelacion c
+                    WHERE c.usuario_id = r.usuario_id
+                      AND c.clase_id = r.clase_id
+                      AND c.fecha_clase = ?
+                  )
+              `).bind(f.id,d,e,e).first()){await I(w,v,c,"⚠️ Ya est\xe1s inscripto en esa clase.");continue}let a=await b.prepare(`
                 SELECT COUNT(DISTINCT usuario_id) as count
                 FROM reserva
                 WHERE clase_id = ?

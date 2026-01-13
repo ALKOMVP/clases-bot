@@ -730,18 +730,16 @@ export async function GET(request: NextRequest) {
     const fecha_clase = searchParams.get('fecha_clase');
     const include_reasignaciones = searchParams.get('include_reasignaciones') === 'true';
 
-    // Limpiar inconsistencias y promover automáticamente cuando hay cupo disponible
-    // OPTIMIZACIÓN: Solo ejecutar una vez, no múltiples veces
+    // OPTIMIZACIÓN: Solo limpiar y promover cuando hay fecha_clase específica
+    // La limpieza global se ejecuta manualmente mediante botón de debug
     try {
       if (fecha_clase && clase_id) {
         // Limpiar inconsistencias y promover para esta fecha/clase específica
         // verificarYPromoverAutomaticamente ya incluye limpieza, no duplicar
         await verificarYPromoverAutomaticamente(db, Number(clase_id), fecha_clase);
-      } else {
-        // Si no hay filtros específicos, solo limpiar inconsistencias globales (sin promoción)
-        // La promoción requiere fecha/clase específica
-        await limpiarListaEsperaInconsistencias(db);
       }
+      // Si no hay filtros específicos, NO ejecutar limpieza automática (optimización de rendimiento)
+      // La limpieza global se puede ejecutar manualmente mediante el botón de debug
     } catch (error: any) {
       // No es crítico si falla la limpieza, continuar con la consulta
       console.warn('[GET /api/reservas] Error en limpieza/promoción automática (no crítico):', error.message || error);
@@ -1244,6 +1242,60 @@ export async function DELETE(request: NextRequest) {
       error,
       'Error al eliminar reserva',
       { route: '/api/reservas', method: 'DELETE', operation: 'delete_reserva' }
+    );
+  }
+}
+
+/**
+ * Endpoint para limpiar inconsistencias de lista de espera manualmente
+ * Solo se ejecuta cuando se llama explícitamente desde el botón de debug
+ */
+export async function PUT(request: NextRequest) {
+  const envInfo = getEnvironmentInfo();
+  const { searchParams } = new URL(request.url);
+  const action = searchParams.get('action');
+  
+  // Solo permitir limpiar inconsistencias si action=cleanup_inconsistencias
+  if (action !== 'cleanup_inconsistencias') {
+    return NextResponse.json({ error: 'Acción no permitida' }, { status: 400 });
+  }
+  
+  console.log('[PUT /api/reservas?action=cleanup_inconsistencias] Limpiando inconsistencias de lista de espera...');
+  
+  try {
+    let db: any = null;
+    
+    const cloudflareContext = (globalThis as any)[Symbol.for('__cloudflare-context__')];
+    if (cloudflareContext?.env?.DB) {
+      db = cloudflareContext.env.DB;
+    } else if (typeof process !== 'undefined' && (process.env as any).DB) {
+      db = (process.env as any).DB;
+    }
+    
+    if (!db) {
+      db = getMockDBInstance();
+    }
+    
+    if (!db) {
+      return NextResponse.json({ error: 'Base de datos no disponible' }, { status: 503 });
+    }
+
+    // Ejecutar limpieza global de inconsistencias
+    const deleted = await limpiarListaEsperaInconsistencias(db);
+
+    console.log('[PUT /api/reservas?action=cleanup_inconsistencias] ✅ Limpieza completada', { deleted });
+
+    return NextResponse.json({ 
+      success: true,
+      deleted,
+      message: `Se eliminaron ${deleted} registros inconsistentes de lista de espera`
+    });
+  } catch (error: any) {
+    console.error('[PUT /api/reservas?action=cleanup_inconsistencias] Error:', error);
+    return createErrorResponse(
+      error,
+      'Error al limpiar inconsistencias',
+      { route: '/api/reservas', method: 'PUT', operation: 'cleanup_inconsistencias' }
     );
   }
 }

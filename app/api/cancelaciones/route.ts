@@ -161,6 +161,91 @@ export async function GET(request: NextRequest) {
   }
 }
 
+// Endpoint para eliminar todas las cancelaciones temporales
+export async function POST(request: NextRequest) {
+  const envInfo = getEnvironmentInfo();
+  const { searchParams } = new URL(request.url);
+  const action = searchParams.get('action');
+  
+  // Solo permitir eliminar todas las cancelaciones temporales si action=delete_all_temporales
+  if (action !== 'delete_all_temporales') {
+    return NextResponse.json({ error: 'Acción no permitida' }, { status: 400 });
+  }
+  
+  console.log('[POST /api/cancelaciones?action=delete_all_temporales] Eliminando todas las cancelaciones temporales...');
+  
+  try {
+    let db: any = null;
+    
+    const cloudflareContext = (globalThis as any)[Symbol.for('__cloudflare-context__')];
+    if (cloudflareContext?.env?.DB) {
+      db = cloudflareContext.env.DB;
+    } else if (typeof process !== 'undefined' && (process.env as any).DB) {
+      db = (process.env as any).DB;
+    }
+    
+    if (!db) {
+      db = getMockDBInstance();
+    }
+    
+    if (!db) {
+      return NextResponse.json({ error: 'Base de datos no disponible' }, { status: 503 });
+    }
+
+    // Verificar si existe la columna es_temporal
+    let tieneColumnaEsTemporal = false;
+    try {
+      await db.prepare('SELECT es_temporal FROM cancelacion LIMIT 1').first();
+      tieneColumnaEsTemporal = true;
+    } catch (e: any) {
+      if (e.message && e.message.includes('no such column')) {
+        tieneColumnaEsTemporal = false;
+      } else {
+        throw e;
+      }
+    }
+
+    if (!tieneColumnaEsTemporal) {
+      return NextResponse.json({ 
+        error: 'La columna es_temporal no existe en la tabla cancelacion',
+        deleted: 0
+      }, { status: 400 });
+    }
+
+    // Contar cuántas cancelaciones temporales hay antes de eliminar
+    const countResult = await db.prepare(`
+      SELECT COUNT(*) as count
+      FROM cancelacion
+      WHERE COALESCE(es_temporal, 0) = 1
+    `).first();
+    const countBefore = (countResult as any)?.count || 0;
+
+    // Eliminar todas las cancelaciones temporales
+    const deleteResult = await db.prepare(`
+      DELETE FROM cancelacion
+      WHERE COALESCE(es_temporal, 0) = 1
+    `).run();
+
+    const deleted = (deleteResult as any)?.meta?.changes || 0;
+
+    console.log('[POST /api/cancelaciones?action=delete_all_temporales] ✅ Eliminadas', deleted, 'cancelaciones temporales');
+
+    return NextResponse.json({ 
+      success: true,
+      deleted,
+      countBefore,
+      message: `Se eliminaron ${deleted} cancelaciones temporales`
+    });
+  } catch (error: any) {
+    console.error('[POST /api/cancelaciones?action=delete_all_temporales] Error:', error);
+    return createErrorResponse(
+      error,
+      'Error al eliminar cancelaciones temporales',
+      { route: '/api/cancelaciones', method: 'POST', operation: 'delete_all_temporales' }
+    );
+  }
+}
+
 export async function DELETE(request: NextRequest) {
   const envInfo = getEnvironmentInfo();
   console.log('[DELETE /api/cancelaciones] Starting request', { environment: envInfo.environment });
