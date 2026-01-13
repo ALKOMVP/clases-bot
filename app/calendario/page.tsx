@@ -793,39 +793,46 @@ export default function CalendarioPage() {
         await loadReservasAll();
         console.log('[handleDeleteReserva] ✅ Todas las reservas recargadas');
 
-        // TERCERO: Recargar reservas del modal con la fecha específica
-        // Esto es CRÍTICO para que el modal muestre correctamente los alumnos promovidos de lista de espera
-        // Esperar un poco más para asegurar que la promoción automática del backend se complete
-        await new Promise(resolve => setTimeout(resolve, 500));
-        console.log('[handleDeleteReserva] 🔄 Recargando reservas del modal para fecha específica...');
-        await loadReservasModal(fechaStr);
-        console.log('[handleDeleteReserva] ✅ Reservas del modal recargadas con datos actualizados');
-
-        // CUARTO: Recargar lista de espera detallada para el modal
-        await new Promise(resolve => setTimeout(resolve, 200));
+        // TERCERO: Esperar más tiempo para asegurar que la promoción automática del backend se complete
+        // La promoción puede tomar tiempo, especialmente si hay múltiples usuarios en lista de espera
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        // CUARTO: Recargar lista de espera detallada PRIMERO (para que se actualice antes de las reservas)
         try {
-          console.log('[handleDeleteReserva] Recargando lista de espera detallada para el modal...');
+          console.log('[handleDeleteReserva] 🔄 Recargando lista de espera detallada para el modal...');
           const listaRes = await fetch(`/api/reservas/lista-espera?clase_id=${selectedClase.clase.id}&fecha_clase=${fechaStr}`);
           if (listaRes.ok) {
             const listaData = await listaRes.json();
             if (Array.isArray(listaData)) {
               setListaEspera(listaData);
-              console.log('[handleDeleteReserva] Lista de espera actualizada:', listaData.length, 'items');
+              console.log('[handleDeleteReserva] ✅ Lista de espera actualizada:', listaData.length, 'items');
             }
           }
         } catch (error) {
-          console.error('Error reloading lista de espera:', error);
+          console.error('[handleDeleteReserva] Error reloading lista de espera:', error);
         }
 
-        // QUINTO: Recargar conteos de lista de espera para todas las fechas (esto actualizará las cards)
-        console.log('[handleDeleteReserva] Recargando conteos de lista de espera...');
-        await loadListaEsperaCounts();
-        console.log('[handleDeleteReserva] Conteos de lista de espera recargados');
-        
-        // SEXTO: Forzar actualización del calendarData incrementando refreshCounter
-        // Esto asegura que el useMemo se recalcule con los nuevos datos
-        console.log('[handleDeleteReserva] Forzando recálculo del calendarData...');
+        // QUINTO: Recargar reservas del modal con la fecha específica
+        // Esto es CRÍTICO para que el modal muestre correctamente los alumnos promovidos de lista de espera
+        await new Promise(resolve => setTimeout(resolve, 300));
+        console.log('[handleDeleteReserva] 🔄 Recargando reservas del modal para fecha específica...');
+        await loadReservasModal(fechaStr);
+        console.log('[handleDeleteReserva] ✅ Reservas del modal recargadas con datos actualizados');
+
+        // SEXTO: Forzar actualización del estado incrementando refreshCounter
+        // Esto asegura que el componente se re-renderice con los nuevos datos
+        console.log('[handleDeleteReserva] 🔄 Forzando re-render del modal con refreshCounter...');
         setRefreshCounter(prev => prev + 1);
+
+        // SÉPTIMO: Recargar conteos de lista de espera para todas las fechas (esto actualizará las cards)
+        console.log('[handleDeleteReserva] 🔄 Recargando conteos de lista de espera...');
+        await loadListaEsperaCounts();
+        console.log('[handleDeleteReserva] ✅ Conteos de lista de espera recargados');
+        
+        // OCTAVO: Forzar otra actualización después de todo para asegurar que el modal se actualice
+        await new Promise(resolve => setTimeout(resolve, 200));
+        setRefreshCounter(prev => prev + 1);
+        console.log('[handleDeleteReserva] ✅ Actualización completa del modal forzada');
         
         // No activar auto-fix automáticamente para evitar loops
         // setNeedsAutoFix(true);
@@ -1439,7 +1446,7 @@ export default function CalendarioPage() {
                           
                           return (
                             <div
-                              key={`temporal-confirmado-${r.id || idx}-${r.usuario_id}-${fechaClaseReserva}`}
+                              key={`temporal-confirmado-${r.id || idx}-${r.usuario_id}-${fechaClaseReserva}-${refreshCounter}`}
                               className="flex items-center justify-between px-3 py-2 rounded-lg border-2 border-green-400 bg-green-50"
                             >
                               <div className="flex items-center gap-2 flex-1 min-w-0">
