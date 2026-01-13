@@ -233,28 +233,70 @@ export default function CalendarioPage() {
       }
     }
 
-    const countsMap = new Map<string, number>();
-    const promises: Promise<void>[] = [];
-
+    // Construir array de combinaciones para el endpoint batch
+    const combinaciones: Array<{ clase_id: number; fecha_clase: string }> = [];
     clases.forEach(clase => {
       fechaSet.forEach(fecha => {
-        promises.push(
-          fetch(`/api/reservas/lista-espera?clase_id=${clase.id}&fecha_clase=${fecha}`)
-            .then(res => res.ok ? res.json() : [])
-            .then(data => {
-              if (Array.isArray(data)) {
-                const key = `${clase.id}-${fecha}`;
-                countsMap.set(key, data.length);
-              }
-            })
-            .catch(() => {})
-        );
+        combinaciones.push({ clase_id: clase.id, fecha_clase: fecha });
       });
     });
 
-    await Promise.all(promises);
-    setListaEsperaCounts(countsMap);
-    console.log('[loadListaEsperaCounts] Lista de espera cargada para', countsMap.size, 'combinaciones clase-fecha');
+    if (combinaciones.length === 0) {
+      setListaEsperaCounts(new Map());
+      return;
+    }
+
+    // Usar endpoint batch para obtener todos los conteos en una sola llamada
+    try {
+      const res = await fetchWithErrorHandling('/api/reservas/lista-espera-counts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ combinaciones })
+      }, {
+        route: '/api/reservas/lista-espera-counts',
+        operation: 'load_lista_espera_counts_batch'
+      });
+
+      const data = await res.json();
+      const countsMap = new Map<string, number>();
+
+      if (data.counts && typeof data.counts === 'object') {
+        Object.entries(data.counts).forEach(([key, value]) => {
+          countsMap.set(key, Number(value) || 0);
+        });
+      }
+
+      setListaEsperaCounts(countsMap);
+      console.log('[loadListaEsperaCounts] ✅ Lista de espera cargada (batch) para', countsMap.size, 'combinaciones clase-fecha');
+    } catch (error) {
+      console.error('[loadListaEsperaCounts] ❌ Error cargando conteos batch, usando fallback:', error);
+      // Fallback: cargar conteos individuales (más lento pero funciona)
+      const countsMap = new Map<string, number>();
+      const batchSize = 10;
+      
+      for (let i = 0; i < combinaciones.length; i += batchSize) {
+        const batch = combinaciones.slice(i, i + batchSize);
+        await Promise.all(
+          batch.map(async (c) => {
+            try {
+              const res = await fetch(`/api/reservas/lista-espera?clase_id=${c.clase_id}&fecha_clase=${c.fecha_clase}`);
+              if (res.ok) {
+                const data = await res.json();
+                if (Array.isArray(data)) {
+                  const key = `${c.clase_id}-${c.fecha_clase}`;
+                  countsMap.set(key, data.length);
+                }
+              }
+            } catch (e) {
+              // Ignorar errores individuales
+            }
+          })
+        );
+      }
+      
+      setListaEsperaCounts(countsMap);
+      console.log('[loadListaEsperaCounts] ✅ Lista de espera cargada (fallback) para', countsMap.size, 'combinaciones clase-fecha');
+    }
   };
 
   const loadClases = async () => {
@@ -1041,8 +1083,12 @@ export default function CalendarioPage() {
         setRefreshCounter(prev => prev + 1);
         setSearchAlumnoTemporal('');
 
-        if (data.enListaEspera) {
-          alert(data.mensaje || 'El alumno ha sido agregado a la lista de espera debido al cupo completo');
+        // Solo mostrar alert si realmente fue a lista de espera
+        // Verificar también en la respuesta del servidor si hay mensaje específico
+        if (data.enListaEspera && data.mensaje) {
+          alert(data.mensaje);
+        } else if (data.enListaEspera) {
+          alert('El alumno ha sido agregado a la lista de espera debido al cupo completo');
         }
       } else {
         console.error('❌ ERROR del servidor:', data);
@@ -1365,39 +1411,52 @@ export default function CalendarioPage() {
                         .filter(r => {
                           const esReasignacion = r.es_reasignacion === 1 || r.es_reasignacion === true || Number(r.es_reasignacion) === 1;
                           const tieneFecha = r.fecha_clase && r.fecha_clase !== 'null' && r.fecha_clase !== null;
+                          const fechaStr = selectedClase.fecha.toISOString().split('T')[0];
+                          const fechaCoincide = tieneFecha && r.fecha_clase === fechaStr;
                           const enListaEspera = listaEspera.some(le => le.usuario_id === r.usuario_id);
-                          return esReasignacion && tieneFecha && !enListaEspera;
+                          return esReasignacion && fechaCoincide && !enListaEspera;
                         })
                         .sort((a, b) => (a.apellido || '').localeCompare(b.apellido || ''))
-                        .map((r, idx) => (
-                          <div
-                            key={`temporal-confirmado-${r.id || idx}-${r.usuario_id}`}
-                            className="flex items-center justify-between px-3 py-2 rounded-lg border-2 border-green-400 bg-green-50"
-                          >
-                            <div className="flex items-center gap-2 flex-1 min-w-0">
-                              <span className="text-green-600 text-base">🔄</span>
-                              <span className="text-sm font-medium text-green-900 truncate">
-                                {r.apellido}, {r.nombre}
-                              </span>
+                        .map((r, idx) => {
+                          // Asegurar que la reserva tenga fecha_clase para eliminación correcta
+                          const fechaClaseReserva = r.fecha_clase && r.fecha_clase !== 'null' && r.fecha_clase !== null 
+                            ? r.fecha_clase 
+                            : selectedClase.fecha.toISOString().split('T')[0];
+                          
+                          return (
+                            <div
+                              key={`temporal-confirmado-${r.id || idx}-${r.usuario_id}-${fechaClaseReserva}`}
+                              className="flex items-center justify-between px-3 py-2 rounded-lg border-2 border-green-400 bg-green-50"
+                            >
+                              <div className="flex items-center gap-2 flex-1 min-w-0">
+                                <span className="text-green-600 text-base">🔄</span>
+                                <span className="text-sm font-medium text-green-900 truncate">
+                                  {r.apellido}, {r.nombre}
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-2 flex-shrink-0">
+                                <span className="text-xs px-2 py-1 bg-green-500 text-white rounded-full font-semibold">TEMPORAL</span>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    e.preventDefault();
+                                    if (!processing) {
+                                      // Asegurar que la reserva tenga fecha_clase para eliminación
+                                      const reservaConFecha = { ...r, fecha_clase: fechaClaseReserva };
+                                      handleDeleteReserva(reservaConFecha);
+                                    }
+                                  }}
+                                  disabled={processing}
+                                  className="text-red-600 hover:text-red-800 text-sm font-medium px-2 py-1 rounded hover:bg-red-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                  title="Eliminar reserva temporal"
+                                  type="button"
+                                >
+                                  ✕
+                                </button>
+                              </div>
                             </div>
-                            <div className="flex items-center gap-2 flex-shrink-0">
-                              <span className="text-xs px-2 py-1 bg-green-500 text-white rounded-full font-semibold">TEMPORAL</span>
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  e.preventDefault();
-                                  if (!processing) handleDeleteReserva(r);
-                                }}
-                                disabled={processing}
-                                className="text-red-600 hover:text-red-800 text-sm font-medium px-2 py-1 rounded hover:bg-red-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                                title="Eliminar reserva"
-                                type="button"
-                              >
-                                ✕
-                              </button>
-                            </div>
-                          </div>
-                        ))}
+                          );
+                        })}
 
                       {listaEspera && listaEspera.length > 0 && (
                         <>

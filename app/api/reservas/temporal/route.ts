@@ -237,13 +237,20 @@ export async function POST(request: NextRequest) {
     }
 
     // Verificar cupo disponible
-    // Contar reservas fijas (sin fecha_clase)
+    // Contar reservas fijas (sin fecha_clase) EXCLUYENDO las que tienen cancelación para esta fecha
     const reservasFijas = await db.prepare(`
-      SELECT COUNT(DISTINCT usuario_id) as count
-      FROM reserva
-      WHERE clase_id = ? AND (fecha_clase IS NULL OR fecha_clase = 'null' OR fecha_clase = '')
-        AND (es_reasignacion IS NULL OR es_reasignacion = 0)
-    `).bind(claseIdNum).first();
+      SELECT COUNT(DISTINCT r.usuario_id) as count
+      FROM reserva r
+      WHERE r.clase_id = ? 
+        AND (r.fecha_clase IS NULL OR r.fecha_clase = 'null' OR r.fecha_clase = '')
+        AND (r.es_reasignacion IS NULL OR r.es_reasignacion = 0)
+        AND NOT EXISTS (
+          SELECT 1 FROM cancelacion c
+          WHERE c.usuario_id = r.usuario_id 
+            AND c.clase_id = r.clase_id 
+            AND c.fecha_clase = ?
+        )
+    `).bind(claseIdNum, fecha_clase).first();
     
     const countFijas = (reservasFijas as any)?.count || 0;
 
@@ -272,6 +279,8 @@ export async function POST(request: NextRequest) {
 
     const cupoMaximo = 35;
     const totalConfirmados = countFijas + countTemporales;
+    // CORRECCIÓN: Solo ir a lista de espera si el cupo está COMPLETO (>=), no si hay espacio disponible
+    // Si totalConfirmados = 34 y cupoMaximo = 35, hay 1 cupo disponible, NO debe ir a lista de espera
     const enListaEspera = totalConfirmados >= cupoMaximo;
 
     // Verificar si el usuario ya está inscrito (fijo o temporal para esta fecha)

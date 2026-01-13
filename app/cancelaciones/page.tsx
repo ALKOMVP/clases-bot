@@ -15,6 +15,7 @@ interface Cancelacion {
   clase_hora?: string;
   clase_nombre?: string;
   created_at?: string;
+  es_temporal?: number | boolean;
 }
 
 export default function CancelacionesPage() {
@@ -23,6 +24,7 @@ export default function CancelacionesPage() {
   const [deleting, setDeleting] = useState(false);
   const [undoingKey, setUndoingKey] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [tipoFiltro, setTipoFiltro] = useState<string>('todas'); // 'todas', 'fija', 'temporal'
   const [showDebugButtons, setShowDebugButtons] = useState(false);
 
   // Ctrl+D para mostrar botones de debug
@@ -39,12 +41,16 @@ export default function CancelacionesPage() {
 
   useEffect(() => {
     loadCancelaciones();
-  }, []);
+  }, [tipoFiltro]);
 
   const loadCancelaciones = async () => {
     setLoading(true);
     try {
-      const res = await fetchWithErrorHandling('/api/cancelaciones', {}, {
+      const url = tipoFiltro === 'todas' 
+        ? '/api/cancelaciones' 
+        : `/api/cancelaciones?tipo=${tipoFiltro}`;
+      
+      const res = await fetchWithErrorHandling(url, {}, {
         route: '/api/cancelaciones',
         operation: 'load_cancelaciones'
       });
@@ -210,7 +216,7 @@ export default function CancelacionesPage() {
           <div>
             <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900">Cancelaciones</h1>
             <p className="text-gray-600 mt-1 sm:mt-2 text-sm sm:text-base">
-              Lista de todas las cancelaciones de alumnos fijos por fecha específica
+              Lista de todas las cancelaciones (fijas y temporales) por fecha específica
             </p>
           </div>
           {cancelaciones.length > 0 && showDebugButtons && (
@@ -224,22 +230,32 @@ export default function CancelacionesPage() {
           )}
         </div>
 
-        {cancelaciones.length > 0 && (
-          <div className="mb-4">
+        <div className="mb-4 space-y-3">
+          <div className="flex flex-col sm:flex-row gap-3">
             <input
               type="text"
               placeholder="Buscar por nombre, apellido, clase, fecha..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm sm:text-base"
+              className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm sm:text-base"
             />
-            {searchTerm && (
-              <p className="mt-2 text-sm text-gray-600">
-                Mostrando {filteredCancelaciones.length} de {cancelaciones.length} cancelaciones
-              </p>
-            )}
+            <select
+              value={tipoFiltro}
+              onChange={(e) => setTipoFiltro(e.target.value)}
+              className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm sm:text-base bg-white"
+            >
+              <option value="todas">Todas las cancelaciones</option>
+              <option value="fija">Solo cancelaciones fijas</option>
+              <option value="temporal">Solo cancelaciones temporales</option>
+            </select>
           </div>
-        )}
+          {cancelaciones.length > 0 && (
+            <p className="text-sm text-gray-600">
+              Total de cancelaciones: {cancelaciones.length}
+              {searchTerm && ` (${filteredCancelaciones.length} filtradas)`}
+            </p>
+          )}
+        </div>
 
         {loading ? (
           <div className="bg-white rounded-lg shadow-md p-8 text-center">
@@ -249,7 +265,7 @@ export default function CancelacionesPage() {
           <div className="bg-white rounded-lg shadow-md p-8 text-center">
             <p className="text-gray-600 mb-2">No hay cancelaciones registradas.</p>
             <p className="text-sm text-gray-500">
-              Las cancelaciones aparecerán aquí cuando un alumno fijo cancele una clase para una fecha específica.
+              Las cancelaciones aparecerán aquí cuando un alumno (fijo o temporal) cancele una clase para una fecha específica.
             </p>
           </div>
         ) : filteredCancelaciones.length === 0 && searchTerm ? (
@@ -331,9 +347,15 @@ export default function CancelacionesPage() {
                         {formatCreatedAt(cancelacion.created_at)}
                       </td>
                       <td className="px-4 sm:px-6 py-4 whitespace-nowrap">
-                        <span className="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-orange-100 text-orange-800">
-                          Cancelación Fija
-                        </span>
+                        {cancelacion.es_temporal === 1 || cancelacion.es_temporal === true ? (
+                          <span className="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800">
+                            Cancelación Temporal
+                          </span>
+                        ) : (
+                          <span className="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-orange-100 text-orange-800">
+                            Cancelación Fija
+                          </span>
+                        )}
                       </td>
                       <td className="px-4 sm:px-6 py-4 whitespace-nowrap text-right">
                         <button

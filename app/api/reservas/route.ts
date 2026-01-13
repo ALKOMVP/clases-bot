@@ -299,12 +299,16 @@ async function verificarYPromoverAutomaticamente(db: any, claseIdNum: number, fe
   let totalPromovidos = 0;
   let maxIteraciones = 10; // Evitar loops infinitos
   let iteracion = 0;
+  let limpiezaEjecutada = false; // Flag para evitar limpieza redundante
 
   while (iteracion < maxIteraciones) {
     iteracion++;
     
-    // Primero limpiar inconsistencias
-    await limpiarListaEsperaInconsistencias(db, claseIdNum, fechaClase);
+    // Limpiar inconsistencias solo en la primera iteración
+    if (!limpiezaEjecutada) {
+      await limpiarListaEsperaInconsistencias(db, claseIdNum, fechaClase);
+      limpiezaEjecutada = true;
+    }
 
     // Verificar cupo actual
     const reservasFijasQuery = await db.prepare(`
@@ -659,16 +663,17 @@ export async function GET(request: NextRequest) {
     const include_reasignaciones = searchParams.get('include_reasignaciones') === 'true';
 
     // Limpiar inconsistencias y promover automáticamente cuando hay cupo disponible
-    // Esto corrige casos donde un usuario tiene reserva temporal pero también está en lista_espera
-    // Y promueve automáticamente a usuarios de lista de espera cuando hay cupo disponible
+    // OPTIMIZACIÓN: Solo ejecutar una vez, no múltiples veces
     try {
       if (fecha_clase && clase_id) {
         // Limpiar inconsistencias y promover para esta fecha/clase específica
-        await limpiarListaEsperaInconsistencias(db, Number(clase_id), fecha_clase);
+        // verificarYPromoverAutomaticamente ya incluye limpieza, no duplicar
         await verificarYPromoverAutomaticamente(db, Number(clase_id), fecha_clase);
+      } else {
+        // Si no hay filtros específicos, solo limpiar inconsistencias globales (sin promoción)
+        // La promoción requiere fecha/clase específica
+        await limpiarListaEsperaInconsistencias(db);
       }
-      // Siempre ejecutar limpieza global para asegurar consistencia
-      await limpiarListaEsperaInconsistencias(db);
     } catch (error: any) {
       // No es crítico si falla la limpieza, continuar con la consulta
       console.warn('[GET /api/reservas] Error en limpieza/promoción automática (no crítico):', error.message || error);
@@ -901,7 +906,7 @@ export async function DELETE(request: NextRequest) {
       `).bind(usuario_id, clase_id, fecha_clase).first();
       
       if (reservaTemporal) {
-        // Eliminar reserva temporal
+        // Eliminar reserva temporal y crear registro de cancelación temporal
         const deleteResult = await db.prepare(`
           DELETE FROM reserva 
           WHERE usuario_id = ? AND clase_id = ? AND fecha_clase = ? AND es_reasignacion = 1
@@ -912,6 +917,42 @@ export async function DELETE(request: NextRequest) {
           fecha_clase,
           changes: (deleteResult as any)?.meta?.changes || 0
         });
+
+        // Crear registro de cancelación temporal en la tabla cancelacion
+        try {
+          // Asegurar que la tabla cancelacion existe y tiene columna es_temporal
+          try {
+            await db.prepare('SELECT es_temporal FROM cancelacion LIMIT 1').first();
+          } catch (colCheckError: any) {
+            if (colCheckError.message && colCheckError.message.includes('no such column')) {
+              try {
+                await db.prepare('ALTER TABLE cancelacion ADD COLUMN es_temporal INTEGER DEFAULT 0').run();
+                console.log('[DELETE /api/reservas] ✅ Columna es_temporal agregada a tabla cancelacion');
+              } catch (alterError: any) {
+                // Ignorar si ya existe
+                if (!alterError.message?.includes('duplicate column')) {
+                  console.warn('[DELETE /api/reservas] Error agregando columna es_temporal:', alterError.message);
+                }
+              }
+            }
+          }
+
+          // Verificar si ya existe cancelación
+          const cancelacionExistente = await db.prepare(`
+            SELECT * FROM cancelacion
+            WHERE usuario_id = ? AND clase_id = ? AND fecha_clase = ?
+          `).bind(Number(usuario_id), Number(clase_id), fecha_clase).first();
+
+          if (!cancelacionExistente) {
+            await db.prepare(`
+              INSERT INTO cancelacion (usuario_id, clase_id, fecha_clase, es_temporal, created_at)
+              VALUES (?, ?, ?, 1, datetime('now'))
+            `).bind(Number(usuario_id), Number(clase_id), fecha_clase).run();
+            console.log('[DELETE /api/reservas] ✅ Cancelación temporal registrada en tabla cancelacion');
+          }
+        } catch (cancelError: any) {
+          console.warn('[DELETE /api/reservas] Error registrando cancelación temporal (no crítico):', cancelError.message || cancelError);
+        }
       } else {
         // Verificar si hay una reserva fija (sin fecha_clase)
         const reservaFija = await db.prepare(`

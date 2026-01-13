@@ -81,12 +81,33 @@ export async function GET(request: NextRequest) {
       }
     }
     
-    const query = `
+    // Verificar si existe columna es_temporal, si no, agregarla
+    try {
+      await db.prepare('SELECT es_temporal FROM cancelacion LIMIT 1').first();
+    } catch (colCheckError: any) {
+      if (colCheckError.message && colCheckError.message.includes('no such column')) {
+        try {
+          await db.prepare('ALTER TABLE cancelacion ADD COLUMN es_temporal INTEGER DEFAULT 0').run();
+          console.log('[GET /api/cancelaciones] ✅ Columna es_temporal agregada');
+        } catch (alterError: any) {
+          // Ignorar si ya existe o si hay otro error
+          if (!alterError.message?.includes('duplicate column')) {
+            console.warn('[GET /api/cancelaciones] Error agregando columna es_temporal:', alterError.message);
+          }
+        }
+      }
+    }
+
+    const { searchParams } = new URL(request.url);
+    const tipoFiltro = searchParams.get('tipo'); // 'fija', 'temporal', o null (todas)
+
+    let query = `
       SELECT 
         c.usuario_id,
         c.clase_id,
         c.fecha_clase,
         c.created_at,
+        COALESCE(c.es_temporal, 0) as es_temporal,
         u.nombre as usuario_nombre,
         u.apellido as usuario_apellido,
         cl.dia as clase_dia,
@@ -95,8 +116,16 @@ export async function GET(request: NextRequest) {
       FROM cancelacion c
       JOIN usuario u ON c.usuario_id = u.id
       JOIN clase cl ON c.clase_id = cl.id
-      ORDER BY c.fecha_clase DESC, c.created_at DESC
     `;
+
+    // Aplicar filtro de tipo si se especifica
+    if (tipoFiltro === 'fija') {
+      query += ' WHERE COALESCE(c.es_temporal, 0) = 0';
+    } else if (tipoFiltro === 'temporal') {
+      query += ' WHERE COALESCE(c.es_temporal, 0) = 1';
+    }
+
+    query += ' ORDER BY c.fecha_clase DESC, c.created_at DESC';
 
     // Si la tabla no existe, devolver array vacío directamente sin intentar query
     if (!tablaExiste) {
@@ -176,35 +205,94 @@ export async function DELETE(request: NextRequest) {
         return NextResponse.json({ error: 'Parámetros inválidos' }, { status: 400 });
       }
 
-      // Seguridad: si ya hay una reserva temporal (reasignación) para esa clase/fecha,
-      // anular la cancelación puede sobrecargar el cupo. En ese caso, devolvemos 409.
+      // Verificar el tipo de cancelación
+      let esTemporal = false;
       try {
-        const conflicto = await db.prepare(`
-          SELECT usuario_id, clase_id, fecha_clase
-          FROM reserva
-          WHERE clase_id = ? AND fecha_clase = ? AND es_reasignacion = 1
-          LIMIT 1
-        `).bind(claseIdNum, fechaClaseStr).first();
-
-        if (conflicto) {
-          return NextResponse.json({
-            error: 'No se puede anular esta cancelación porque ya existe una reasignación temporal para esa clase/fecha. Primero anulá la reserva temporal asociada.'
-          }, { status: 409 });
-        }
+        const cancelacionInfo = await db.prepare(`
+          SELECT es_temporal FROM cancelacion
+          WHERE usuario_id = ? AND clase_id = ? AND fecha_clase = ?
+        `).bind(usuarioIdNum, claseIdNum, fechaClaseStr).first();
+        esTemporal = (cancelacionInfo as any)?.es_temporal === 1 || (cancelacionInfo as any)?.es_temporal === true;
       } catch (e: any) {
-        // Si la tabla/columna no existe por alguna razón, no bloqueamos la anulación.
-        console.warn('[DELETE /api/cancelaciones] No se pudo chequear conflicto de reasignación temporal:', e?.message || e);
+        // Si no existe la columna, asumir que es cancelación fija
+        console.warn('[DELETE /api/cancelaciones] No se pudo verificar tipo de cancelación:', e?.message || e);
+      }
+
+      // Si es cancelación temporal, verificar que no haya conflicto con reserva temporal existente
+      if (esTemporal) {
+        try {
+          const conflicto = await db.prepare(`
+            SELECT usuario_id, clase_id, fecha_clase
+            FROM reserva
+            WHERE clase_id = ? AND fecha_clase = ? AND es_reasignacion = 1
+            LIMIT 1
+          `).bind(claseIdNum, fechaClaseStr).first();
+
+          if (conflicto) {
+            return NextResponse.json({
+              error: 'No se puede anular esta cancelación temporal porque ya existe una reserva temporal para esa clase/fecha. Primero eliminá la reserva temporal asociada.'
+            }, { status: 409 });
+          }
+        } catch (e: any) {
+          console.warn('[DELETE /api/cancelaciones] No se pudo chequear conflicto de reasignación temporal:', e?.message || e);
+        }
+      } else {
+        // Si es cancelación fija, verificar conflicto como antes
+        try {
+          const conflicto = await db.prepare(`
+            SELECT usuario_id, clase_id, fecha_clase
+            FROM reserva
+            WHERE clase_id = ? AND fecha_clase = ? AND es_reasignacion = 1
+            LIMIT 1
+          `).bind(claseIdNum, fechaClaseStr).first();
+
+          if (conflicto) {
+            return NextResponse.json({
+              error: 'No se puede anular esta cancelación porque ya existe una reasignación temporal para esa clase/fecha. Primero anulá la reserva temporal asociada.'
+            }, { status: 409 });
+          }
+        } catch (e: any) {
+          console.warn('[DELETE /api/cancelaciones] No se pudo chequear conflicto de reasignación temporal:', e?.message || e);
+        }
       }
 
       try {
+        // Si es cancelación temporal, intentar recrear la reserva temporal al anular
+        if (esTemporal) {
+          try {
+            // Verificar que no exista ya una reserva temporal
+            const reservaExistente = await db.prepare(`
+              SELECT * FROM reserva
+              WHERE usuario_id = ? AND clase_id = ? AND fecha_clase = ? AND es_reasignacion = 1
+            `).bind(usuarioIdNum, claseIdNum, fechaClaseStr).first();
+
+            if (!reservaExistente) {
+              // Recrear la reserva temporal
+              await db.prepare(`
+                INSERT INTO reserva (usuario_id, clase_id, fecha_clase, es_reasignacion, created_at)
+                VALUES (?, ?, ?, 1, datetime('now'))
+              `).bind(usuarioIdNum, claseIdNum, fechaClaseStr).run();
+              console.log('[DELETE /api/cancelaciones] ✅ Reserva temporal recreada al anular cancelación temporal');
+            }
+          } catch (recreateError: any) {
+            console.warn('[DELETE /api/cancelaciones] Error recreando reserva temporal (no crítico):', recreateError.message || recreateError);
+          }
+        }
+
         const result = await db.prepare(`
           DELETE FROM cancelacion
           WHERE usuario_id = ? AND clase_id = ? AND fecha_clase = ?
         `).bind(usuarioIdNum, claseIdNum, fechaClaseStr).run();
 
         const deleted = result?.meta?.changes || 0;
-        console.log('[DELETE /api/cancelaciones] Single delete success', { usuario_id: usuarioIdNum, clase_id: claseIdNum, fecha_clase: fechaClaseStr, deleted });
-        return NextResponse.json({ deleted, success: true });
+        console.log('[DELETE /api/cancelaciones] Single delete success', { 
+          usuario_id: usuarioIdNum, 
+          clase_id: claseIdNum, 
+          fecha_clase: fechaClaseStr, 
+          deleted,
+          es_temporal: esTemporal
+        });
+        return NextResponse.json({ deleted, success: true, es_temporal: esTemporal });
       } catch (error: any) {
         if (error.message && error.message.includes('no such table')) {
           return NextResponse.json({ deleted: 0, success: true });
