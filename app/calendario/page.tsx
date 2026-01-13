@@ -439,73 +439,39 @@ export default function CalendarioPage() {
         const clasesDelDia = clases
           .filter(c => c.dia === diaClase)
           .map(clase => {
-            const reservasClase = reservasAll.filter(r => {
-              if (Number(r.clase_id) !== Number(clase.id)) return false;
-              
-              const esFija = !r.fecha_clase || r.fecha_clase === 'null' || r.fecha_clase === null || r.fecha_clase === '';
-              const esTemporal = r.fecha_clase && r.fecha_clase !== 'null' && r.fecha_clase !== null && r.fecha_clase !== '' && r.fecha_clase === fechaStr;
-              
-              // Debug para jueves 22 de enero 19:00
-              if (fechaStr === '2026-01-22' && clase.hora === '19:00' && Number(r.clase_id) === Number(clase.id)) {
-                console.log('[Card Debug] Reserva en reservasAll:', {
-                  usuario_id: r.usuario_id,
-                  nombre: `${r.apellido}, ${r.nombre}`,
-                  clase_id: r.clase_id,
-                  fecha_clase: r.fecha_clase,
-                  es_reasignacion: r.es_reasignacion,
-                  esFija,
-                  esTemporal,
-                  fechaStr,
-                  incluida: esFija || esTemporal
-                });
+            const claseId = Number(clase.id);
+            const reservasClase: Reserva[] = [];
+
+            // Obtener reservas fijas para esta clase (sin fecha específica) usando índice
+            const reservasFijasKey = `fija_${claseId}`;
+            const reservasFijas = reservasIndex.get(reservasFijasKey) || [];
+            
+            // Obtener reservas temporales para esta clase y fecha usando índice
+            const reservasTemporalesKey = `temporal_${claseId}_${fechaStr}`;
+            const reservasTemporales = reservasIndex.get(reservasTemporalesKey) || [];
+
+            // Filtrar cancelaciones usando el índice (O(1) en lugar de O(n))
+            for (const r of reservasFijas) {
+              const cancelKey = `${r.usuario_id}_${claseId}_${fechaStr}`;
+              if (!cancelacionesIndex.has(cancelKey)) {
+                reservasClase.push(r);
               }
-              
-              return esFija || esTemporal;
-            });
+            }
 
-            // Filtrar cancelaciones y reservas en lista de espera
-            const reservasFiltradas = reservasClase.filter(r => {
-              const esReasignacion = r.es_reasignacion === 1 || r.es_reasignacion === true || Number(r.es_reasignacion) === 1;
-              const tieneFecha = r.fecha_clase && r.fecha_clase !== 'null' && r.fecha_clase !== null && r.fecha_clase !== '';
-              
-              // Si es reserva temporal para esta fecha, verificar cancelación
-              if (esReasignacion && tieneFecha && r.fecha_clase === fechaStr) {
-                const cancelada = cancelaciones.some(c => 
-                  Number(c.usuario_id) === Number(r.usuario_id) && 
-                  Number(c.clase_id) === Number(r.clase_id) && 
-                  c.fecha_clase === fechaStr
-                );
-                if (cancelada) return false;
+            for (const r of reservasTemporales) {
+              const cancelKey = `${r.usuario_id}_${claseId}_${fechaStr}`;
+              if (!cancelacionesIndex.has(cancelKey)) {
+                reservasClase.push(r);
               }
+            }
 
-              // Si es reserva fija (sin fecha_clase), verificar si tiene cancelación para esta fecha específica
-              if (!esReasignacion && !tieneFecha) {
-                const cancelada = cancelaciones.some(c => 
-                  Number(c.usuario_id) === Number(r.usuario_id) && 
-                  Number(c.clase_id) === Number(r.clase_id) && 
-                  c.fecha_clase === fechaStr
-                );
-                if (cancelada) return false;
-              }
-
-              // NO excluir reservas temporales confirmadas aunque haya usuarios en lista de espera
-              // Si una reserva temporal existe, significa que está confirmada y NO está en lista de espera
-              // La lista de espera solo contiene usuarios que NO tienen reserva temporal confirmada
-              // Por lo tanto, si encontramos una reserva temporal, debe incluirse siempre (ya verificamos cancelaciones arriba)
-
-              return true;
-            });
-
-            // Eliminar duplicados por usuario_id
-            // IMPORTANTE: Si un usuario tiene reserva temporal, NO debería tener también reserva fija para la misma clase
-            // Pero por seguridad, priorizamos temporales sobre fijas si ambas existen
-            const seen = new Set<number>();
-            const reservasTemporalesPrimero = reservasFiltradas.filter(r => {
+            // Eliminar duplicados por usuario_id (priorizar temporales sobre fijas)
+            const reservasTemporalesPrimero = reservasClase.filter(r => {
               const esReasignacion = r.es_reasignacion === 1 || r.es_reasignacion === true || Number(r.es_reasignacion) === 1;
               const tieneFecha = r.fecha_clase && r.fecha_clase !== 'null' && r.fecha_clase !== null && r.fecha_clase !== '';
               return tieneFecha && esReasignacion && r.fecha_clase === fechaStr;
             });
-            const reservasFijas = reservasFiltradas.filter(r => {
+            const reservasFijasUnicas = reservasClase.filter(r => {
               const esReasignacion = r.es_reasignacion === 1 || r.es_reasignacion === true || Number(r.es_reasignacion) === 1;
               const tieneFecha = r.fecha_clase && r.fecha_clase !== 'null' && r.fecha_clase !== null && r.fecha_clase !== '';
               return !tieneFecha || !esReasignacion;
@@ -515,7 +481,7 @@ export default function CalendarioPage() {
             const usuariosConTemporal = new Set(reservasTemporalesPrimero.map(r => r.usuario_id));
             const reservasUnicas = [
               ...reservasTemporalesPrimero,
-              ...reservasFijas.filter(r => !usuariosConTemporal.has(r.usuario_id))
+              ...reservasFijasUnicas.filter(r => !usuariosConTemporal.has(r.usuario_id))
             ];
 
             return {
