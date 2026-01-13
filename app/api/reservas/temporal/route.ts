@@ -299,15 +299,21 @@ export async function POST(request: NextRequest) {
     // Si totalConfirmados = 34 y cupoMaximo = 35, hay 1 cupo disponible, NO debe ir a lista de espera
     const enListaEspera = totalConfirmados >= cupoMaximo;
 
-    // Verificar si el usuario ya está inscrito (fijo o temporal para esta fecha)
+    // Verificar si el usuario ya está inscrito (fijo o temporal para esta fecha) EXCLUYENDO las canceladas
     const existingReserva = await db.prepare(`
-      SELECT * FROM reserva 
-      WHERE usuario_id = ? AND clase_id = ? 
-        AND (fecha_clase IS NULL OR fecha_clase = 'null' OR fecha_clase = '' OR fecha_clase = ?)
-    `).bind(usuarioIdNum, claseIdNum, fecha_clase).first();
+      SELECT r.* FROM reserva r
+      WHERE r.usuario_id = ? AND r.clase_id = ? 
+        AND (r.fecha_clase IS NULL OR r.fecha_clase = 'null' OR r.fecha_clase = '' OR r.fecha_clase = ?)
+        AND NOT EXISTS (
+          SELECT 1 FROM cancelacion c
+          WHERE c.usuario_id = r.usuario_id
+            AND c.clase_id = r.clase_id
+            AND c.fecha_clase = ?
+        )
+    `).bind(usuarioIdNum, claseIdNum, fecha_clase, fecha_clase).first();
 
     if (existingReserva) {
-      // Si ya existe una reserva fija, no crear temporal
+      // Si ya existe una reserva fija (sin cancelación), no crear temporal
       if (!existingReserva.fecha_clase || existingReserva.fecha_clase === 'null' || existingReserva.fecha_clase === '') {
         return NextResponse.json({ 
           error: 'El alumno ya está inscrito como alumno fijo en esta clase',
@@ -315,7 +321,7 @@ export async function POST(request: NextRequest) {
         }, { status: 400 });
       }
       
-      // Si ya existe una reserva temporal para esta fecha
+      // Si ya existe una reserva temporal para esta fecha (sin cancelación)
       if (existingReserva.fecha_clase === fecha_clase) {
         return NextResponse.json({ 
           error: 'El alumno ya está inscrito como temporal para esta fecha',
