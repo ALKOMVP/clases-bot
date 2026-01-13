@@ -1150,8 +1150,15 @@ export default function CalendarioPage() {
           setListaEspera([]);
         }
 
+        // Esperar un momento adicional para asegurar que el backend haya procesado todo
+        await new Promise(resolve => setTimeout(resolve, 300));
+        
         // Recargar el modal con los datos actualizados
         console.log('[handleAddTemporal] 🔄 Recargando modal con datos actualizados...');
+        await loadReservasModal(fechaStr);
+        
+        // Esperar un poco más y recargar nuevamente para asegurar que se vea el nuevo temporal
+        await new Promise(resolve => setTimeout(resolve, 200));
         await loadReservasModal(fechaStr);
         
         // Forzar actualización del modal

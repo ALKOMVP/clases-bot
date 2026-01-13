@@ -328,9 +328,15 @@ async function verificarYPromoverAutomaticamente(db: any, claseIdNum: number, fe
     const countFijas = (reservasFijasQuery as any)?.count || 0;
 
     const reservasTemporales = await db.prepare(`
-      SELECT COUNT(DISTINCT usuario_id) as count
-      FROM reserva
-      WHERE clase_id = ? AND fecha_clase = ? AND es_reasignacion = 1
+      SELECT COUNT(DISTINCT r.usuario_id) as count
+      FROM reserva r
+      WHERE r.clase_id = ? AND r.fecha_clase = ? AND r.es_reasignacion = 1
+        AND NOT EXISTS (
+          SELECT 1 FROM cancelacion c
+          WHERE c.usuario_id = r.usuario_id 
+            AND c.clase_id = r.clase_id 
+            AND c.fecha_clase = r.fecha_clase
+        )
     `).bind(claseIdNum, fechaClase).first();
     
     const countTemporales = (reservasTemporales as any)?.count || 0;
@@ -472,9 +478,15 @@ async function promoverDeListaEspera(db: any, claseIdNum: number, fechaClase: st
     const countFijas = (reservasFijasQuery as any)?.count || 0;
 
     const reservasTemporales = await db.prepare(`
-      SELECT COUNT(DISTINCT usuario_id) as count
-      FROM reserva
-      WHERE clase_id = ? AND fecha_clase = ? AND es_reasignacion = 1
+      SELECT COUNT(DISTINCT r.usuario_id) as count
+      FROM reserva r
+      WHERE r.clase_id = ? AND r.fecha_clase = ? AND r.es_reasignacion = 1
+        AND NOT EXISTS (
+          SELECT 1 FROM cancelacion c
+          WHERE c.usuario_id = r.usuario_id 
+            AND c.clase_id = r.clase_id 
+            AND c.fecha_clase = r.fecha_clase
+        )
     `).bind(claseIdNum, fechaClase).first();
     
     const countTemporales = (reservasTemporales as any)?.count || 0;
@@ -704,15 +716,13 @@ export async function GET(request: NextRequest) {
       conditions.push('(r.fecha_clase IS NULL OR r.fecha_clase = \'null\' OR r.fecha_clase = \'\' OR r.fecha_clase = ?)');
       params.push(fecha_clase);
       
-      // EXCLUIR reservas fijas que tienen cancelación para esta fecha específica
-      // Solo aplicar esto a reservas fijas (sin fecha_clase y sin es_reasignacion)
+      // EXCLUIR reservas que tienen cancelación para esta fecha específica
+      // Aplica tanto a reservas fijas como temporales
       conditions.push(`NOT EXISTS (
         SELECT 1 FROM cancelacion c
         WHERE c.usuario_id = r.usuario_id 
           AND c.clase_id = r.clase_id 
           AND c.fecha_clase = ?
-          AND (r.fecha_clase IS NULL OR r.fecha_clase = 'null' OR r.fecha_clase = '')
-          AND (r.es_reasignacion IS NULL OR r.es_reasignacion = 0 OR r.es_reasignacion = '0')
       )`);
       params.push(fecha_clase);
     } else if (!include_reasignaciones) {
