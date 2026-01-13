@@ -1054,7 +1054,8 @@ export default function CalendarioPage() {
       console.log('');
 
       if (res.ok) {
-        await new Promise(resolve => setTimeout(resolve, 500));
+        // Esperar un momento para que el backend procese la promoción automática
+        await new Promise(resolve => setTimeout(resolve, 800));
 
         console.log('========================================');
         console.log('[handleAddTemporal] ESTADO DESPUÉS DE AGREGAR');
@@ -1100,10 +1101,14 @@ export default function CalendarioPage() {
           console.warn('⚠️ Error obteniendo diagnóstico después:', error);
         }
 
+        // Recargar todas las reservas para actualizar las cards
         await loadReservasAll();
         console.log('[handleAddTemporal] Todas las reservas recargadas para actualizar cards del calendario');
+        
+        // Esperar un momento adicional para asegurar que el backend haya procesado todo
         await new Promise(resolve => setTimeout(resolve, 500));
 
+        // Recargar lista de espera
         try {
           console.log(`[handleAddTemporal] 🔄 Recargando lista de espera para clase ${selectedClase.clase.id}, fecha ${fechaStr}...`);
           const listaRes = await fetch(`/api/reservas/lista-espera?clase_id=${selectedClase.clase.id}&fecha_clase=${fechaStr}`);
@@ -1145,18 +1150,29 @@ export default function CalendarioPage() {
           setListaEspera([]);
         }
 
+        // Recargar el modal con los datos actualizados
+        console.log('[handleAddTemporal] 🔄 Recargando modal con datos actualizados...');
         await loadReservasModal(fechaStr);
-        // No activar auto-fix automáticamente para evitar loops
-        // setNeedsAutoFix(true);
+        
+        // Forzar actualización del modal
         setRefreshCounter(prev => prev + 1);
         setSearchAlumnoTemporal('');
 
-        // Solo mostrar alert si realmente fue a lista de espera
-        // Verificar también en la respuesta del servidor si hay mensaje específico
-        if (data.enListaEspera && data.mensaje) {
-          alert(data.mensaje);
-        } else if (data.enListaEspera) {
-          alert('El alumno ha sido agregado a la lista de espera debido al cupo completo');
+        // Mostrar mensaje según el resultado
+        if (data.enListaEspera) {
+          // Fue a lista de espera
+          if (data.mensaje) {
+            alert(data.mensaje);
+          } else {
+            alert('El alumno ha sido agregado a la lista de espera debido al cupo completo');
+          }
+        } else {
+          // Se confirmó exitosamente
+          if (data.mensaje) {
+            alert(data.mensaje);
+          } else {
+            alert('✅ Alumno agregado como temporal confirmado correctamente.');
+          }
         }
       } else {
         console.error('❌ ERROR del servidor:', data);
