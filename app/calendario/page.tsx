@@ -1524,7 +1524,7 @@ export default function CalendarioPage() {
                                       {reservasTemporales.length} temporal{reservasTemporales.length > 1 ? 'es' : ''} confirmado{reservasTemporales.length > 1 ? 's' : ''}
                                     </div>
                                   )}
-                                  {listaEsperaCount > 0 && (
+                                  {listaEsperaCount !== undefined && listaEsperaCount > 0 && (
                                     <div className="text-amber-600 font-semibold">
                                       {listaEsperaCount} {listaEsperaCount === 1 ? 'en lista de espera' : 'en lista de espera'}
                                     </div>
