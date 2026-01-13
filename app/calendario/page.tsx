@@ -386,6 +386,39 @@ export default function CalendarioPage() {
     return dias[dia] || dia;
   };
 
+  // Pre-indexar cancelaciones para búsquedas O(1) en lugar de O(n)
+  const cancelacionesIndex = useMemo(() => {
+    const index = new Set<string>();
+    cancelaciones.forEach(c => {
+      const key = `${c.usuario_id}_${c.clase_id}_${c.fecha_clase}`;
+      index.add(key);
+    });
+    return index;
+  }, [cancelaciones]);
+
+  // Pre-indexar reservas por clase_id y fecha para acceso rápido
+  const reservasIndex = useMemo(() => {
+    const index = new Map<string, Reserva[]>();
+    reservasAll.forEach(r => {
+      const claseId = Number(r.clase_id);
+      const esFija = !r.fecha_clase || r.fecha_clase === 'null' || r.fecha_clase === null || r.fecha_clase === '';
+      
+      if (esFija) {
+        // Para reservas fijas, indexar por clase_id sin fecha (se usará para todas las fechas)
+        const key = `fija_${claseId}`;
+        if (!index.has(key)) index.set(key, []);
+        index.get(key)!.push(r);
+      } else {
+        // Para reservas temporales, indexar por clase_id y fecha_clase
+        const fechaStr = r.fecha_clase;
+        const key = `temporal_${claseId}_${fechaStr}`;
+        if (!index.has(key)) index.set(key, []);
+        index.get(key)!.push(r);
+      }
+    });
+    return index;
+  }, [reservasAll]);
+
   const calendarData = useMemo(() => {
     // No retornar vacío si está cargando, permitir que se renderice el loading
     if (!clases || clases.length === 0) return [];
@@ -511,7 +544,7 @@ export default function CalendarioPage() {
     }
 
     return calendar;
-  }, [clases, reservasAll, cancelaciones, listaEspera, loading, refreshCounter]);
+  }, [clases, reservasIndex, cancelacionesIndex, refreshCounter]);
 
   const handleCloseModal = () => {
     setListaEspera([]);
@@ -1308,98 +1341,17 @@ export default function CalendarioPage() {
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                       {item.clases.map((c, cIdx) => {
                         const fechaStr = c.fecha.toISOString().split('T')[0];
-                        // Filtrar reservas fijas excluyendo las que tienen cancelación para esta fecha
+                        // Usar las reservas ya calculadas en calendarData (ya filtradas y sin duplicados)
                         const reservasFijas = c.reservas.filter(r => {
                           const esReasignacion = r.es_reasignacion === 1 || r.es_reasignacion === true || Number(r.es_reasignacion) === 1;
                           const tieneFecha = r.fecha_clase && r.fecha_clase !== 'null' && r.fecha_clase !== null && r.fecha_clase !== '';
-                          // Debe ser una reserva fija (sin fecha_clase y sin es_reasignacion)
-                          if (esReasignacion || tieneFecha) return false;
-                          // Excluir si tiene cancelación para esta fecha específica
-                          const tieneCancelacion = cancelaciones.some(cancel => 
-                            Number(cancel.usuario_id) === Number(r.usuario_id) && 
-                            Number(cancel.clase_id) === Number(r.clase_id) && 
-                            cancel.fecha_clase === fechaStr
-                          );
-                          return !tieneCancelacion;
+                          return !esReasignacion && !tieneFecha;
                         });
-                        // Calcular temporales desde reservasAll directamente para esta clase y fecha
-                        // Esto asegura que usemos los datos más actualizados, no solo c.reservas
-                        const temporalesDesdeAll = reservasAll.filter(r => {
-                          if (Number(r.clase_id) !== Number(c.clase.id)) return false;
+                        const reservasTemporales = c.reservas.filter(r => {
                           const esReasignacion = r.es_reasignacion === 1 || r.es_reasignacion === true || Number(r.es_reasignacion) === 1;
                           const tieneFecha = r.fecha_clase && r.fecha_clase !== 'null' && r.fecha_clase !== null && r.fecha_clase !== '';
-                          const fechaCoincide = tieneFecha && r.fecha_clase === fechaStr;
-                          const esTemporal = fechaCoincide && esReasignacion;
-                          
-                          if (!esTemporal) return false;
-                          
-                          // CRÍTICO: Verificar que no esté cancelada
-                          const cancelada = cancelaciones.some(cancel => 
-                            Number(cancel.usuario_id) === Number(r.usuario_id) && 
-                            Number(cancel.clase_id) === Number(r.clase_id) && 
-                            cancel.fecha_clase === fechaStr
-                          );
-                          
-                          if (cancelada) {
-                            console.log('[calendarData] Temporal excluido por cancelación en card:', {
-                              usuario_id: r.usuario_id,
-                              nombre: `${r.apellido}, ${r.nombre}`,
-                              fecha_clase: r.fecha_clase,
-                              clase_id: r.clase_id
-                            });
-                            return false;
-                          }
-                          
-                          return true;
+                          return esReasignacion && tieneFecha && r.fecha_clase === fechaStr;
                         });
-                        
-                        // También verificar en c.reservas por si acaso (pero también filtrar cancelaciones)
-                        const temporalesDesdeC = c.reservas.filter(r => {
-                          const esReasignacion = r.es_reasignacion === 1 || r.es_reasignacion === true || Number(r.es_reasignacion) === 1;
-                          const tieneFecha = r.fecha_clase && r.fecha_clase !== 'null' && r.fecha_clase !== null && r.fecha_clase !== '';
-                          const fechaCoincide = tieneFecha && r.fecha_clase === fechaStr;
-                          
-                          if (!fechaCoincide || !esReasignacion) return false;
-                          
-                          // Excluir si está cancelada
-                          const cancelada = cancelaciones.some(cancel => 
-                            Number(cancel.usuario_id) === Number(r.usuario_id) && 
-                            Number(cancel.clase_id) === Number(r.clase_id) && 
-                            cancel.fecha_clase === fechaStr
-                          );
-                          
-                          return !cancelada;
-                        });
-                        
-                        // Usar la unión de ambos para asegurar que no se pierda ningún temporal
-                        const todosLosTemporales = [...temporalesDesdeAll, ...temporalesDesdeC];
-                        const reservasTemporales = todosLosTemporales.filter((r, idx, self) => 
-                          idx === self.findIndex(t => t.usuario_id === r.usuario_id)
-                        );
-                        
-                        // Debug para jueves 15 de enero 19:00
-                        if (fechaStr === '2026-01-15' && Number(c.clase.id) === 1) {
-                          console.log('[calendarData] DEBUG jueves 15 enero 19:00:', {
-                            fechaStr,
-                            clase_id: c.clase.id,
-                            temporalesDesdeAll: temporalesDesdeAll.length,
-                            temporalesDesdeC: temporalesDesdeC.length,
-                            todosLosTemporales: todosLosTemporales.length,
-                            reservasTemporales: reservasTemporales.length,
-                            detalles: reservasTemporales.map(r => ({
-                              usuario_id: r.usuario_id,
-                              nombre: `${r.apellido}, ${r.nombre}`,
-                              fecha_clase: r.fecha_clase
-                            })),
-                            cancelacionesParaEstaFecha: cancelaciones.filter(cancel => 
-                              cancel.fecha_clase === fechaStr && Number(cancel.clase_id) === Number(c.clase.id)
-                            ).map(c => ({
-                              usuario_id: c.usuario_id,
-                              fecha_clase: c.fecha_clase,
-                              es_temporal: c.es_temporal
-                            }))
-                          });
-                        }
                         
                         const key = `${c.clase.id}-${fechaStr}`;
                         const listaEsperaCount = listaEsperaCounts.get(key) || 0;
