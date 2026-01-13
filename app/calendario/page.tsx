@@ -770,8 +770,14 @@ export default function CalendarioPage() {
         console.log('[handleDeleteReserva] Respuesta vacía o inválida, continuando...');
       }
 
+      // CRÍTICO: Limpiar reservasModal inmediatamente para evitar que se muestren datos obsoletos
+      // Esto fuerza a getReservasTemporales a usar reservasAll hasta que se recargue el modal
+      console.log('[handleDeleteReserva] 🧹 Limpiando reservasModal para evitar datos obsoletos...');
+      setReservasModal([]);
+
       // Esperar un momento para que el backend complete todas las operaciones (cancelación + promoción)
-      await new Promise(resolve => setTimeout(resolve, 500));
+      // Aumentar el tiempo de espera para asegurar que la promoción automática se complete
+      await new Promise(resolve => setTimeout(resolve, 800));
 
       if (selectedClase) {
         const fechaStr = selectedClase.fecha.toISOString().split('T')[0];
@@ -786,6 +792,14 @@ export default function CalendarioPage() {
         console.log('[handleDeleteReserva] 🔄 Recargando TODAS las reservas para actualizar cards...');
         await loadReservasAll();
         console.log('[handleDeleteReserva] ✅ Todas las reservas recargadas');
+
+        // TERCERO: Recargar reservas del modal con la fecha específica
+        // Esto es CRÍTICO para que el modal muestre correctamente los alumnos promovidos de lista de espera
+        // Esperar un poco más para asegurar que la promoción automática del backend se complete
+        await new Promise(resolve => setTimeout(resolve, 500));
+        console.log('[handleDeleteReserva] 🔄 Recargando reservas del modal para fecha específica...');
+        await loadReservasModal(fechaStr);
+        console.log('[handleDeleteReserva] ✅ Reservas del modal recargadas con datos actualizados');
 
         // CUARTO: Recargar lista de espera detallada para el modal
         await new Promise(resolve => setTimeout(resolve, 200));
