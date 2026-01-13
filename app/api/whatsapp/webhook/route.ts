@@ -356,7 +356,7 @@ async function getProximasClases(db: any, usuarioId: number) {
 async function getProximasCancelables(db: any, usuarioId: number) {
   const items: Array<{ fecha: Date; clase: any; reserva: any; esTemporal: boolean }> = [];
 
-  // Temporales del usuario (con fecha_clase)
+  // Temporales del usuario (con fecha_clase) EXCLUYENDO las canceladas
   const temporales = await db.prepare(`
     SELECT r.*, c.dia, c.hora, c.nombre
     FROM reserva r
@@ -365,6 +365,12 @@ async function getProximasCancelables(db: any, usuarioId: number) {
       AND r.es_reasignacion = 1
       AND r.fecha_clase IS NOT NULL AND r.fecha_clase != '' AND r.fecha_clase != 'null'
       AND date(r.fecha_clase) >= date('now')
+      AND NOT EXISTS (
+        SELECT 1 FROM cancelacion c
+        WHERE c.usuario_id = r.usuario_id 
+          AND c.clase_id = r.clase_id 
+          AND c.fecha_clase = r.fecha_clase
+      )
     ORDER BY r.fecha_clase ASC, c.hora ASC
   `).bind(usuarioId).all();
 
