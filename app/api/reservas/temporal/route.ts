@@ -254,14 +254,30 @@ export async function POST(request: NextRequest) {
     
     const countFijas = (reservasFijas as any)?.count || 0;
 
-    // Contar reservas temporales confirmadas para esta fecha
+    // Contar reservas temporales confirmadas para esta fecha EXCLUYENDO las canceladas
     const reservasTemporales = await db.prepare(`
-      SELECT COUNT(DISTINCT usuario_id) as count
-      FROM reserva
-      WHERE clase_id = ? AND fecha_clase = ? AND es_reasignacion = 1
+      SELECT COUNT(DISTINCT r.usuario_id) as count
+      FROM reserva r
+      WHERE r.clase_id = ? 
+        AND r.fecha_clase = ? 
+        AND r.es_reasignacion = 1
+        AND NOT EXISTS (
+          SELECT 1 FROM cancelacion c
+          WHERE c.usuario_id = r.usuario_id 
+            AND c.clase_id = r.clase_id 
+            AND c.fecha_clase = r.fecha_clase
+        )
     `).bind(claseIdNum, fecha_clase).first();
     
     const countTemporales = (reservasTemporales as any)?.count || 0;
+    
+    console.log('[POST /api/reservas/temporal] Conteo de capacidad:', {
+      countFijas,
+      countTemporales,
+      totalConfirmados: countFijas + countTemporales,
+      cupoMaximo: 35,
+      hayEspacio: (countFijas + countTemporales) < 35
+    });
 
     // Contar lista de espera para esta clase y fecha
     let listaEsperaCount = 0;
