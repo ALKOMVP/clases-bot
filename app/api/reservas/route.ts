@@ -292,6 +292,157 @@ async function limpiarListaEsperaInconsistencias(db: any, claseIdNum?: number, f
 }
 
 /**
+ * Función auxiliar para verificar y promover automáticamente usuarios de lista de espera
+ * cuando hay cupo disponible. Se ejecuta en bucle hasta que no haya más cupo o no haya más personas en lista.
+ */
+async function verificarYPromoverAutomaticamente(db: any, claseIdNum: number, fechaClase: string): Promise<number> {
+  let totalPromovidos = 0;
+  let maxIteraciones = 10; // Evitar loops infinitos
+  let iteracion = 0;
+
+  while (iteracion < maxIteraciones) {
+    iteracion++;
+    
+    // Primero limpiar inconsistencias
+    await limpiarListaEsperaInconsistencias(db, claseIdNum, fechaClase);
+
+    // Verificar cupo actual
+    const reservasFijasQuery = await db.prepare(`
+      SELECT COUNT(DISTINCT r.usuario_id) as count
+      FROM reserva r
+      WHERE r.clase_id = ? 
+        AND (r.fecha_clase IS NULL OR r.fecha_clase = 'null' OR r.fecha_clase = '')
+        AND (r.es_reasignacion IS NULL OR r.es_reasignacion = 0)
+        AND NOT EXISTS (
+          SELECT 1 FROM cancelacion c
+          WHERE c.usuario_id = r.usuario_id 
+            AND c.clase_id = r.clase_id 
+            AND c.fecha_clase = ?
+        )
+    `).bind(claseIdNum, fechaClase).first();
+    
+    const countFijas = (reservasFijasQuery as any)?.count || 0;
+
+    const reservasTemporales = await db.prepare(`
+      SELECT COUNT(DISTINCT usuario_id) as count
+      FROM reserva
+      WHERE clase_id = ? AND fecha_clase = ? AND es_reasignacion = 1
+    `).bind(claseIdNum, fechaClase).first();
+    
+    const countTemporales = (reservasTemporales as any)?.count || 0;
+
+    const cupoMaximo = 35;
+    const totalConfirmados = countFijas + countTemporales;
+    const cupoDisponible = cupoMaximo - totalConfirmados;
+
+    // Si no hay cupo disponible, salir del bucle
+    if (cupoDisponible <= 0) {
+      console.log(`[verificarYPromoverAutomaticamente] No hay cupo disponible para ${fechaClase}`, {
+        totalConfirmados,
+        cupoMaximo,
+        cupoDisponible
+      });
+      break;
+    }
+
+    // Verificar si hay alguien en lista de espera
+    const primeroEnLista = await db.prepare(`
+      SELECT * FROM lista_espera
+      WHERE clase_id = ? AND fecha_clase = ?
+      ORDER BY numero ASC
+      LIMIT 1
+    `).bind(claseIdNum, fechaClase).first();
+
+    if (!primeroEnLista) {
+      console.log(`[verificarYPromoverAutomaticamente] No hay nadie en lista de espera para ${fechaClase}`);
+      break;
+    }
+
+    const siguienteUsuarioId = (primeroEnLista as any).usuario_id;
+    const numeroEnLista = (primeroEnLista as any).numero;
+
+    console.log(`[verificarYPromoverAutomaticamente] 🔄 Promoviendo usuario de lista de espera (iteración ${iteracion}):`, {
+      usuario_id: siguienteUsuarioId,
+      numero_en_lista: numeroEnLista,
+      cupo_disponible: cupoDisponible,
+      total_confirmados: totalConfirmados
+    });
+
+    // Verificar que el usuario no tenga ya una reserva temporal
+    const reservaExistente = await db.prepare(`
+      SELECT * FROM reserva 
+      WHERE usuario_id = ? AND clase_id = ? AND fecha_clase = ?
+    `).bind(siguienteUsuarioId, claseIdNum, fechaClase).first();
+
+    if (!reservaExistente) {
+      // Crear reserva temporal
+      await db.prepare(`
+        INSERT INTO reserva (usuario_id, clase_id, fecha_clase, es_reasignacion, created_at)
+        VALUES (?, ?, ?, 1, datetime('now'))
+      `).bind(siguienteUsuarioId, claseIdNum, fechaClase).run();
+
+      // Eliminar de lista de espera
+      await db.prepare(`
+        DELETE FROM lista_espera
+        WHERE usuario_id = ? AND clase_id = ? AND fecha_clase = ?
+      `).bind(siguienteUsuarioId, claseIdNum, fechaClase).run();
+
+      // Reordenar números de lista de espera
+      const listaRestante = await db.prepare(`
+        SELECT * FROM lista_espera
+        WHERE clase_id = ? AND fecha_clase = ?
+        ORDER BY numero ASC
+      `).bind(claseIdNum, fechaClase).all();
+
+      const items = (listaRestante.results || []) as any[];
+      for (let i = 0; i < items.length; i++) {
+        await db.prepare(`
+          UPDATE lista_espera
+          SET numero = ?
+          WHERE usuario_id = ? AND clase_id = ? AND fecha_clase = ?
+        `).bind(i + 1, items[i].usuario_id, claseIdNum, fechaClase).run();
+      }
+
+      // Notificar por WhatsApp
+      try {
+        const usuario = await db.prepare('SELECT telefono FROM usuario WHERE id = ?')
+          .bind(siguienteUsuarioId)
+          .first();
+
+        const telefonoRaw = (usuario as any)?.telefono ? String((usuario as any).telefono) : '';
+        if (telefonoRaw) {
+          await enviarPlantillaConfirmarReserva({
+            db,
+            usuarioId: siguienteUsuarioId,
+            claseId: claseIdNum,
+            fechaClase,
+            telefonoRaw,
+          });
+        }
+      } catch (e: any) {
+        console.error('[verificarYPromoverAutomaticamente] Error notificando por WhatsApp:', e?.message || e);
+      }
+
+      totalPromovidos++;
+      console.log(`[verificarYPromoverAutomaticamente] ✅ Usuario promovido exitosamente (total: ${totalPromovidos})`);
+    } else {
+      // Si ya tiene reserva, solo eliminarlo de lista de espera
+      await db.prepare(`
+        DELETE FROM lista_espera
+        WHERE usuario_id = ? AND clase_id = ? AND fecha_clase = ?
+      `).bind(siguienteUsuarioId, claseIdNum, fechaClase).run();
+      console.log(`[verificarYPromoverAutomaticamente] ⚠️ Usuario ya tenía reserva, eliminado de lista de espera`);
+    }
+  }
+
+  if (totalPromovidos > 0) {
+    console.log(`[verificarYPromoverAutomaticamente] ✅ Promoción automática completada: ${totalPromovidos} usuario(s) promovido(s) para ${fechaClase}`);
+  }
+
+  return totalPromovidos;
+}
+
+/**
  * Función auxiliar para promover el siguiente usuario de la lista de espera a reserva temporal confirmada
  * cuando hay cupo disponible para una fecha específica
  */
@@ -507,18 +658,20 @@ export async function GET(request: NextRequest) {
     const fecha_clase = searchParams.get('fecha_clase');
     const include_reasignaciones = searchParams.get('include_reasignaciones') === 'true';
 
-    // Limpiar inconsistencias: eliminar de lista_espera a usuarios que ya tienen reserva temporal confirmada
+    // Limpiar inconsistencias y promover automáticamente cuando hay cupo disponible
     // Esto corrige casos donde un usuario tiene reserva temporal pero también está en lista_espera
-    // Ejecutar siempre, no solo cuando hay filtros específicos
+    // Y promueve automáticamente a usuarios de lista de espera cuando hay cupo disponible
     try {
       if (fecha_clase && clase_id) {
+        // Limpiar inconsistencias y promover para esta fecha/clase específica
         await limpiarListaEsperaInconsistencias(db, Number(clase_id), fecha_clase);
+        await verificarYPromoverAutomaticamente(db, Number(clase_id), fecha_clase);
       }
       // Siempre ejecutar limpieza global para asegurar consistencia
       await limpiarListaEsperaInconsistencias(db);
     } catch (error: any) {
       // No es crítico si falla la limpieza, continuar con la consulta
-      console.warn('[GET /api/reservas] Error en limpieza de inconsistencias (no crítico):', error.message || error);
+      console.warn('[GET /api/reservas] Error en limpieza/promoción automática (no crítico):', error.message || error);
     }
 
     let query = `

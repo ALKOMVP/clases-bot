@@ -86,6 +86,86 @@ export async function GET(request: NextRequest) {
         }
       }
 
+      // Antes de obtener la lista de espera, verificar y promover automáticamente si hay cupo disponible
+      // Esto asegura que la lista de espera esté actualizada
+      try {
+        // Importar la función de promoción automática (está en route.ts)
+        // Por ahora, ejecutamos la lógica directamente aquí
+        const reservasFijasQuery = await db.prepare(`
+          SELECT COUNT(DISTINCT r.usuario_id) as count
+          FROM reserva r
+          WHERE r.clase_id = ? 
+            AND (r.fecha_clase IS NULL OR r.fecha_clase = 'null' OR r.fecha_clase = '')
+            AND (r.es_reasignacion IS NULL OR r.es_reasignacion = 0)
+            AND NOT EXISTS (
+              SELECT 1 FROM cancelacion c
+              WHERE c.usuario_id = r.usuario_id 
+                AND c.clase_id = r.clase_id 
+                AND c.fecha_clase = ?
+            )
+        `).bind(clase_id, fecha_clase).first();
+        
+        const countFijas = (reservasFijasQuery as any)?.count || 0;
+        const reservasTemporales = await db.prepare(`
+          SELECT COUNT(DISTINCT usuario_id) as count
+          FROM reserva
+          WHERE clase_id = ? AND fecha_clase = ? AND es_reasignacion = 1
+        `).bind(clase_id, fecha_clase).first();
+        const countTemporales = (reservasTemporales as any)?.count || 0;
+        const cupoMaximo = 35;
+        const totalConfirmados = countFijas + countTemporales;
+        const cupoDisponible = cupoMaximo - totalConfirmados;
+
+        // Si hay cupo disponible, promover automáticamente
+        if (cupoDisponible > 0) {
+          const primeroEnLista = await db.prepare(`
+            SELECT * FROM lista_espera
+            WHERE clase_id = ? AND fecha_clase = ?
+            ORDER BY numero ASC
+            LIMIT 1
+          `).bind(clase_id, fecha_clase).first();
+
+          if (primeroEnLista) {
+            const siguienteUsuarioId = (primeroEnLista as any).usuario_id;
+            const reservaExistente = await db.prepare(`
+              SELECT * FROM reserva 
+              WHERE usuario_id = ? AND clase_id = ? AND fecha_clase = ?
+            `).bind(siguienteUsuarioId, clase_id, fecha_clase).first();
+
+            if (!reservaExistente) {
+              await db.prepare(`
+                INSERT INTO reserva (usuario_id, clase_id, fecha_clase, es_reasignacion, created_at)
+                VALUES (?, ?, ?, 1, datetime('now'))
+              `).bind(siguienteUsuarioId, clase_id, fecha_clase).run();
+
+              await db.prepare(`
+                DELETE FROM lista_espera
+                WHERE usuario_id = ? AND clase_id = ? AND fecha_clase = ?
+              `).bind(siguienteUsuarioId, clase_id, fecha_clase).run();
+
+              // Reordenar números
+              const listaRestante = await db.prepare(`
+                SELECT * FROM lista_espera
+                WHERE clase_id = ? AND fecha_clase = ?
+                ORDER BY numero ASC
+              `).bind(clase_id, fecha_clase).all();
+              const items = (listaRestante.results || []) as any[];
+              for (let i = 0; i < items.length; i++) {
+                await db.prepare(`
+                  UPDATE lista_espera
+                  SET numero = ?
+                  WHERE usuario_id = ? AND clase_id = ? AND fecha_clase = ?
+                `).bind(i + 1, items[i].usuario_id, clase_id, fecha_clase).run();
+              }
+
+              console.log(`[GET /api/reservas/lista-espera] ✅ Promovido automáticamente usuario ${siguienteUsuarioId} de lista de espera`);
+            }
+          }
+        }
+      } catch (promoError: any) {
+        console.warn('[GET /api/reservas/lista-espera] Error en promoción automática (no crítico):', promoError.message || promoError);
+      }
+
       const query = `
         SELECT le.*, u.nombre, u.apellido
         FROM lista_espera le
