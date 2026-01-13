@@ -218,37 +218,40 @@ export async function DELETE(request: NextRequest) {
         console.warn('[DELETE /api/cancelaciones] No se pudo verificar tipo de cancelación:', e?.message || e);
       }
 
-      // Si es cancelación temporal, verificar que no haya conflicto con reserva temporal existente
+      // Si es cancelación temporal, verificar que no haya conflicto con reserva temporal del MISMO usuario
       if (esTemporal) {
         try {
-          const conflicto = await db.prepare(`
+          const reservaExistenteMismoUsuario = await db.prepare(`
             SELECT usuario_id, clase_id, fecha_clase
             FROM reserva
-            WHERE clase_id = ? AND fecha_clase = ? AND es_reasignacion = 1
+            WHERE usuario_id = ? AND clase_id = ? AND fecha_clase = ? AND es_reasignacion = 1
             LIMIT 1
-          `).bind(claseIdNum, fechaClaseStr).first();
+          `).bind(usuarioIdNum, claseIdNum, fechaClaseStr).first();
 
-          if (conflicto) {
+          if (reservaExistenteMismoUsuario) {
+            // Si ya existe una reserva temporal del mismo usuario, no se puede anular
+            // porque la reserva ya fue recreada o nunca se eliminó
             return NextResponse.json({
-              error: 'No se puede anular esta cancelación temporal porque ya existe una reserva temporal para esa clase/fecha. Primero eliminá la reserva temporal asociada.'
+              error: 'No se puede anular esta cancelación temporal porque ya existe una reserva temporal para este alumno en esa clase/fecha. La cancelación ya fue anulada o la reserva nunca se eliminó.'
             }, { status: 409 });
           }
         } catch (e: any) {
           console.warn('[DELETE /api/cancelaciones] No se pudo chequear conflicto de reasignación temporal:', e?.message || e);
         }
       } else {
-        // Si es cancelación fija, verificar conflicto como antes
+        // Si es cancelación fija, verificar que no haya una reserva temporal del MISMO usuario
+        // (no de cualquier usuario, solo del mismo)
         try {
-          const conflicto = await db.prepare(`
+          const reservaTemporalMismoUsuario = await db.prepare(`
             SELECT usuario_id, clase_id, fecha_clase
             FROM reserva
-            WHERE clase_id = ? AND fecha_clase = ? AND es_reasignacion = 1
+            WHERE usuario_id = ? AND clase_id = ? AND fecha_clase = ? AND es_reasignacion = 1
             LIMIT 1
-          `).bind(claseIdNum, fechaClaseStr).first();
+          `).bind(usuarioIdNum, claseIdNum, fechaClaseStr).first();
 
-          if (conflicto) {
+          if (reservaTemporalMismoUsuario) {
             return NextResponse.json({
-              error: 'No se puede anular esta cancelación porque ya existe una reasignación temporal para esa clase/fecha. Primero anulá la reserva temporal asociada.'
+              error: 'No se puede anular esta cancelación fija porque ya existe una reserva temporal para este alumno en esa clase/fecha. Primero eliminá la reserva temporal asociada.'
             }, { status: 409 });
           }
         } catch (e: any) {
