@@ -300,6 +300,8 @@ export async function POST(request: NextRequest) {
     const enListaEspera = totalConfirmados >= cupoMaximo;
 
     // Verificar si el usuario ya está inscrito (fijo o temporal para esta fecha) EXCLUYENDO las canceladas
+    // Verificar si existe una reserva (fija o temporal) que NO tenga cancelación
+    // IMPORTANTE: Para temporales, verificar específicamente que no haya cancelación temporal
     const existingReserva = await db.prepare(`
       SELECT r.* FROM reserva r
       WHERE r.usuario_id = ? AND r.clase_id = ? 
@@ -312,21 +314,53 @@ export async function POST(request: NextRequest) {
         )
     `).bind(usuarioIdNum, claseIdNum, fecha_clase, fecha_clase).first();
 
+    // Verificar también si hay una cancelación temporal específica para esta fecha
+    // (esto es importante porque puede haber una reserva temporal que todavía existe pero tiene cancelación)
+    const cancelacionTemporalCheck = await db.prepare(`
+      SELECT * FROM cancelacion
+      WHERE usuario_id = ? AND clase_id = ? AND fecha_clase = ?
+        AND (es_temporal = 1 OR es_temporal = true OR COALESCE(es_temporal, 0) = 1)
+    `).bind(usuarioIdNum, claseIdNum, fecha_clase).first();
+
+    console.log('[POST /api/reservas/temporal] Verificación de reserva existente:', {
+      usuarioIdNum,
+      claseIdNum,
+      fecha_clase,
+      existingReserva: existingReserva ? {
+        id: existingReserva.id,
+        fecha_clase: existingReserva.fecha_clase,
+        es_reasignacion: existingReserva.es_reasignacion
+      } : null,
+      cancelacionTemporalCheck: cancelacionTemporalCheck ? {
+        usuario_id: cancelacionTemporalCheck.usuario_id,
+        clase_id: cancelacionTemporalCheck.clase_id,
+        fecha_clase: cancelacionTemporalCheck.fecha_clase,
+        es_temporal: cancelacionTemporalCheck.es_temporal
+      } : null
+    });
+
     if (existingReserva) {
-      // Si ya existe una reserva fija (sin cancelación), no crear temporal
-      if (!existingReserva.fecha_clase || existingReserva.fecha_clase === 'null' || existingReserva.fecha_clase === '') {
-        return NextResponse.json({ 
-          error: 'El alumno ya está inscrito como alumno fijo en esta clase',
-          code: 'YA_ES_FIJO'
-        }, { status: 400 });
-      }
-      
-      // Si ya existe una reserva temporal para esta fecha (sin cancelación)
-      if (existingReserva.fecha_clase === fecha_clase) {
-        return NextResponse.json({ 
-          error: 'El alumno ya está inscrito como temporal para esta fecha',
-          code: 'YA_ES_TEMPORAL'
-        }, { status: 400 });
+      // Si hay una cancelación temporal, significa que la reserva fue eliminada previamente
+      // y deberíamos poder crear una nueva reserva temporal (la cancelación se eliminará más adelante)
+      if (cancelacionTemporalCheck) {
+        console.log('[POST /api/reservas/temporal] ⚠️ Reserva existe pero tiene cancelación temporal - permitiendo re-inscripción');
+        // No retornar error, continuar con la creación (la cancelación se eliminará antes de crear la reserva)
+      } else {
+        // Si ya existe una reserva fija (sin cancelación), no crear temporal
+        if (!existingReserva.fecha_clase || existingReserva.fecha_clase === 'null' || existingReserva.fecha_clase === '') {
+          return NextResponse.json({ 
+            error: 'El alumno ya está inscrito como alumno fijo en esta clase',
+            code: 'YA_ES_FIJO'
+          }, { status: 400 });
+        }
+        
+        // Si ya existe una reserva temporal para esta fecha (sin cancelación)
+        if (existingReserva.fecha_clase === fecha_clase) {
+          return NextResponse.json({ 
+            error: 'El alumno ya está inscrito como temporal para esta fecha',
+            code: 'YA_ES_TEMPORAL'
+          }, { status: 400 });
+        }
       }
     }
 
