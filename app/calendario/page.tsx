@@ -145,11 +145,15 @@ export default function CalendarioPage() {
       const url = '/api/reservas?include_reasignaciones=true';
       console.log('[loadReservasAll] 🔄 Cargando TODAS las reservas (sin filtro de fecha)');
 
+      // La limpieza de inconsistencias se ejecuta automáticamente en el backend al consultar reservas
       const res = await fetchWithErrorHandling(url, {}, {
         route: '/api/reservas',
         operation: 'load_reservas_all'
       });
       const data = await res.json();
+      
+      // Después de cargar reservas, recargar lista de espera para asegurar consistencia
+      await loadListaEsperaCounts();
 
       if (Array.isArray(data)) {
         console.log('[loadReservasAll] ✅ Reservas cargadas:', {
@@ -452,7 +456,12 @@ export default function CalendarioPage() {
     setSelectedClase({ clase, fecha });
     setShowModal(true);
     const fechaStr = fecha.toISOString().split('T')[0];
+    
+    // Primero recargar reservas (esto ejecutará la limpieza automática en el backend)
     await loadReservasModal(fechaStr);
+    
+    // Esperar un momento para que la limpieza se complete
+    await new Promise(resolve => setTimeout(resolve, 100));
 
     try {
       console.log(`[handleClaseClick] 🔄 Cargando lista de espera para clase ${clase.id}, fecha ${fechaStr}...`);
@@ -1411,7 +1420,7 @@ export default function CalendarioPage() {
                                     <span className="text-xs px-2 py-1 bg-yellow-600 text-white rounded-full font-semibold">
                                       {item.numero || idx + 1}
                                     </span>
-                                    <span className="text-xs px-2 py-1 bg-green-500 text-white rounded-full font-semibold">TEMPORAL</span>
+                                    <span className="text-xs px-2 py-1 bg-yellow-600 text-white rounded-full font-semibold">LISTA ESPERA</span>
                                     <button
                                       onClick={(e) => {
                                         e.stopPropagation();

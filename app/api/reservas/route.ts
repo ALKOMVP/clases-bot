@@ -209,7 +209,43 @@ async function enviarPlantillaConfirmarReserva(params: {
  */
 async function limpiarListaEsperaInconsistencias(db: any, claseIdNum?: number, fechaClase?: string): Promise<number> {
   try {
-    let query = `
+    // Primero, obtener los registros inconsistentes para logging
+    let selectQuery = `
+      SELECT le.*, r.usuario_id as reserva_usuario_id
+      FROM lista_espera le
+      INNER JOIN reserva r ON (
+        r.usuario_id = le.usuario_id
+        AND r.clase_id = le.clase_id
+        AND r.fecha_clase = le.fecha_clase
+        AND r.es_reasignacion = 1
+      )
+    `;
+    const selectParams: any[] = [];
+
+    if (claseIdNum && fechaClase) {
+      selectQuery += ' WHERE le.clase_id = ? AND le.fecha_clase = ?';
+      selectParams.push(claseIdNum, fechaClase);
+    }
+
+    let inconsistencias: any[] = [];
+    try {
+      const selectResult = await db.prepare(selectQuery).bind(...selectParams).all();
+      inconsistencias = (selectResult.results || []) as any[];
+      if (inconsistencias.length > 0) {
+        console.log(`[limpiarListaEsperaInconsistencias] 🔍 Encontradas ${inconsistencias.length} inconsistencias:`, 
+          inconsistencias.map((item: any) => ({
+            usuario_id: item.usuario_id,
+            clase_id: item.clase_id,
+            fecha_clase: item.fecha_clase
+          }))
+        );
+      }
+    } catch (selectError: any) {
+      console.warn('[limpiarListaEsperaInconsistencias] Error al consultar inconsistencias:', selectError.message || selectError);
+    }
+
+    // Ahora eliminar las inconsistencias
+    let deleteQuery = `
       DELETE FROM lista_espera
       WHERE EXISTS (
         SELECT 1 FROM reserva r
@@ -219,21 +255,28 @@ async function limpiarListaEsperaInconsistencias(db: any, claseIdNum?: number, f
           AND r.es_reasignacion = 1
       )
     `;
-    const params: any[] = [];
+    const deleteParams: any[] = [];
 
     if (claseIdNum && fechaClase) {
-      query += ' AND lista_espera.clase_id = ? AND lista_espera.fecha_clase = ?';
-      params.push(claseIdNum, fechaClase);
+      deleteQuery += ' AND lista_espera.clase_id = ? AND lista_espera.fecha_clase = ?';
+      deleteParams.push(claseIdNum, fechaClase);
     }
 
-    const result = await db.prepare(query).bind(...params).run();
+    const result = await db.prepare(deleteQuery).bind(...deleteParams).run();
     const deleted = (result as any)?.changes || 0;
 
     if (deleted > 0) {
       console.log(`[limpiarListaEsperaInconsistencias] ✅ Eliminados ${deleted} registros inconsistentes de lista_espera`, {
         claseIdNum,
-        fechaClase
+        fechaClase,
+        detalles: inconsistencias.slice(0, 5).map((item: any) => ({
+          usuario_id: item.usuario_id,
+          clase_id: item.clase_id,
+          fecha_clase: item.fecha_clase
+        }))
       });
+    } else if (inconsistencias.length === 0) {
+      console.log(`[limpiarListaEsperaInconsistencias] ✅ No se encontraron inconsistencias`, { claseIdNum, fechaClase });
     }
 
     return deleted;
@@ -466,13 +509,13 @@ export async function GET(request: NextRequest) {
 
     // Limpiar inconsistencias: eliminar de lista_espera a usuarios que ya tienen reserva temporal confirmada
     // Esto corrige casos donde un usuario tiene reserva temporal pero también está en lista_espera
+    // Ejecutar siempre, no solo cuando hay filtros específicos
     try {
       if (fecha_clase && clase_id) {
         await limpiarListaEsperaInconsistencias(db, Number(clase_id), fecha_clase);
-      } else {
-        // Si no hay filtros específicos, limpiar todas las inconsistencias
-        await limpiarListaEsperaInconsistencias(db);
       }
+      // Siempre ejecutar limpieza global para asegurar consistencia
+      await limpiarListaEsperaInconsistencias(db);
     } catch (error: any) {
       // No es crítico si falla la limpieza, continuar con la consulta
       console.warn('[GET /api/reservas] Error en limpieza de inconsistencias (no crítico):', error.message || error);
