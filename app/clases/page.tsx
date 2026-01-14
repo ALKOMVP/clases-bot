@@ -18,6 +18,8 @@ export default function ClasesPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(12); // 12 items por página
+  const [sortField, setSortField] = useState<string | null>(null);
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
   const [showForm, setShowForm] = useState(false);
   const [formData, setFormData] = useState({
     dia: 'Lun',
@@ -138,11 +140,51 @@ export default function ClasesPage() {
     );
   });
 
-  // Calcular paginación DESPUÉS de aplicar filtros
-  const totalPages = Math.ceil(filteredClases.length / itemsPerPage);
+  // Ordenar clases DESPUÉS de aplicar filtros
+  const sortedClases = [...filteredClases].sort((a, b) => {
+    if (!sortField) return 0;
+
+    let aValue: any;
+    let bValue: any;
+
+    switch (sortField) {
+      case 'dia':
+        const diaOrder: { [key: string]: number } = { 'Lun': 1, 'Mar': 2, 'Jue': 3, 'Sab': 4 };
+        aValue = diaOrder[a.dia] || 999;
+        bValue = diaOrder[b.dia] || 999;
+        break;
+      case 'hora':
+        aValue = a.hora || '';
+        bValue = b.hora || '';
+        break;
+      case 'nombre':
+        aValue = (a.nombre || '').toLowerCase();
+        bValue = (b.nombre || '').toLowerCase();
+        break;
+      default:
+        return 0;
+    }
+
+    if (aValue < bValue) return sortDirection === 'asc' ? -1 : 1;
+    if (aValue > bValue) return sortDirection === 'asc' ? 1 : -1;
+    return 0;
+  });
+
+  // Calcular paginación DESPUÉS de aplicar filtros y ordenamiento
+  const totalPages = Math.ceil(sortedClases.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
   const endIndex = startIndex + itemsPerPage;
-  const paginatedClases = filteredClases.slice(startIndex, endIndex);
+  const paginatedClases = sortedClases.slice(startIndex, endIndex);
+
+  const handleSort = (field: string) => {
+    if (sortField === field) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortDirection('asc');
+    }
+    setCurrentPage(1);
+  };
 
   // Resetear a página 1 cuando cambia el término de búsqueda
   useEffect(() => {
@@ -281,7 +323,7 @@ export default function ClasesPage() {
             </div>
             {searchTerm && (
               <p className="mt-2 text-sm text-gray-600">
-                Mostrando {filteredClases.length} de {clases.length} clases
+                Mostrando {sortedClases.length} de {clases.length} clases
               </p>
             )}
           </div>
@@ -307,9 +349,39 @@ export default function ClasesPage() {
                 <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="px-4 sm:px-6 py-2 text-left text-xs font-medium text-gray-500 uppercase">Día</th>
-                    <th className="px-4 sm:px-6 py-2 text-left text-xs font-medium text-gray-500 uppercase">Hora</th>
-                    <th className="px-4 sm:px-6 py-2 text-left text-xs font-medium text-gray-500 uppercase">Nombre</th>
+                    <th 
+                      className="px-4 sm:px-6 py-2 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none"
+                      onClick={() => handleSort('dia')}
+                    >
+                      <div className="flex items-center gap-1">
+                        Día
+                        {sortField === 'dia' && (
+                          <span>{sortDirection === 'asc' ? '↑' : '↓'}</span>
+                        )}
+                      </div>
+                    </th>
+                    <th 
+                      className="px-4 sm:px-6 py-2 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none"
+                      onClick={() => handleSort('hora')}
+                    >
+                      <div className="flex items-center gap-1">
+                        Hora
+                        {sortField === 'hora' && (
+                          <span>{sortDirection === 'asc' ? '↑' : '↓'}</span>
+                        )}
+                      </div>
+                    </th>
+                    <th 
+                      className="px-4 sm:px-6 py-2 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none"
+                      onClick={() => handleSort('nombre')}
+                    >
+                      <div className="flex items-center gap-1">
+                        Nombre
+                        {sortField === 'nombre' && (
+                          <span>{sortDirection === 'asc' ? '↑' : '↓'}</span>
+                        )}
+                      </div>
+                    </th>
                     <th className="px-4 sm:px-6 py-2 text-left text-xs font-medium text-gray-500 uppercase">Acciones</th>
                   </tr>
                 </thead>
@@ -340,7 +412,7 @@ export default function ClasesPage() {
             {totalPages > 1 && (
               <div className="bg-white px-4 py-3 border-t border-gray-200 flex flex-col sm:flex-row items-center justify-between gap-4 mt-4 rounded-lg shadow-md">
                 <div className="text-sm text-gray-700">
-                  Mostrando {startIndex + 1} a {Math.min(endIndex, filteredClases.length)} de {filteredClases.length} clases
+                  Mostrando {startIndex + 1} a {Math.min(endIndex, sortedClases.length)} de {sortedClases.length} clases
                 </div>
                 <div className="flex items-center gap-2">
                   <button

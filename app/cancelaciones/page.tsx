@@ -26,6 +26,8 @@ export default function CancelacionesPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [tipoFiltro, setTipoFiltro] = useState<string>('todas'); // 'todas', 'fija', 'temporal'
   const [showDebugButtons, setShowDebugButtons] = useState(false);
+  const [sortField, setSortField] = useState<string | null>(null);
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(12); // 12 items por página
 
@@ -218,11 +220,63 @@ export default function CancelacionesPage() {
     );
   });
 
-  // Calcular paginación DESPUÉS de aplicar filtros
-  const totalPages = Math.ceil(filteredCancelaciones.length / itemsPerPage);
+  // Ordenar cancelaciones DESPUÉS de aplicar filtros
+  const sortedCancelaciones = [...filteredCancelaciones].sort((a, b) => {
+    if (!sortField) return 0;
+
+    let aValue: any;
+    let bValue: any;
+
+    switch (sortField) {
+      case 'alumno':
+        aValue = `${(a.usuario_apellido || '').toLowerCase()}, ${(a.usuario_nombre || '').toLowerCase()}`;
+        bValue = `${(b.usuario_apellido || '').toLowerCase()}, ${(b.usuario_nombre || '').toLowerCase()}`;
+        break;
+      case 'fecha_clase':
+        aValue = new Date(a.fecha_clase + 'T00:00:00').getTime();
+        bValue = new Date(b.fecha_clase + 'T00:00:00').getTime();
+        break;
+      case 'fecha_cancelacion':
+        try {
+          const aDateStr = (a.created_at || '').trim();
+          const bDateStr = (b.created_at || '').trim();
+          const aDate = new Date(aDateStr.endsWith('Z') || aDateStr.includes('+') || aDateStr.includes('-', 10) ? aDateStr : aDateStr + 'Z');
+          const bDate = new Date(bDateStr.endsWith('Z') || bDateStr.includes('+') || bDateStr.includes('-', 10) ? bDateStr : bDateStr + 'Z');
+          aValue = aDate.getTime();
+          bValue = bDate.getTime();
+        } catch {
+          aValue = 0;
+          bValue = 0;
+        }
+        break;
+      case 'tipo':
+        aValue = (a.es_temporal === 1 || a.es_temporal === true) ? 1 : 0;
+        bValue = (b.es_temporal === 1 || b.es_temporal === true) ? 1 : 0;
+        break;
+      default:
+        return 0;
+    }
+
+    if (aValue < bValue) return sortDirection === 'asc' ? -1 : 1;
+    if (aValue > bValue) return sortDirection === 'asc' ? 1 : -1;
+    return 0;
+  });
+
+  // Calcular paginación DESPUÉS de aplicar filtros y ordenamiento
+  const totalPages = Math.ceil(sortedCancelaciones.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
   const endIndex = startIndex + itemsPerPage;
-  const paginatedCancelaciones = filteredCancelaciones.slice(startIndex, endIndex);
+  const paginatedCancelaciones = sortedCancelaciones.slice(startIndex, endIndex);
+
+  const handleSort = (field: string) => {
+    if (sortField === field) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortDirection('asc');
+    }
+    setCurrentPage(1);
+  };
 
   // Resetear a página 1 cuando cambia el término de búsqueda o el filtro de tipo
   useEffect(() => {
@@ -307,7 +361,7 @@ export default function CancelacionesPage() {
               <p className="text-sm text-gray-600">
                 {searchTerm ? (
                   <>
-                    Mostrando <span className="font-semibold text-gray-900">{filteredCancelaciones.length}</span> de{' '}
+                    Mostrando <span className="font-semibold text-gray-900">{sortedCancelaciones.length}</span> de{' '}
                     <span className="font-semibold text-gray-900">{cancelaciones.length}</span> cancelaciones
                   </>
                 ) : (
@@ -321,20 +375,52 @@ export default function CancelacionesPage() {
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Alumno
+                    <th 
+                      className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none"
+                      onClick={() => handleSort('alumno')}
+                    >
+                      <div className="flex items-center gap-1">
+                        Alumno
+                        {sortField === 'alumno' && (
+                          <span>{sortDirection === 'asc' ? '↑' : '↓'}</span>
+                        )}
+                      </div>
                     </th>
                     <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden md:table-cell">
                       Clase
                     </th>
-                    <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Fecha Cancelada
+                    <th 
+                      className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none"
+                      onClick={() => handleSort('fecha_clase')}
+                    >
+                      <div className="flex items-center gap-1">
+                        Fecha Cancelada
+                        {sortField === 'fecha_clase' && (
+                          <span>{sortDirection === 'asc' ? '↑' : '↓'}</span>
+                        )}
+                      </div>
                     </th>
-                    <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden lg:table-cell">
-                      Fecha de Cancelación
+                    <th 
+                      className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden lg:table-cell cursor-pointer hover:bg-gray-100 select-none"
+                      onClick={() => handleSort('fecha_cancelacion')}
+                    >
+                      <div className="flex items-center gap-1">
+                        Fecha de Cancelación
+                        {sortField === 'fecha_cancelacion' && (
+                          <span>{sortDirection === 'asc' ? '↑' : '↓'}</span>
+                        )}
+                      </div>
                     </th>
-                    <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Tipo
+                    <th 
+                      className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none"
+                      onClick={() => handleSort('tipo')}
+                    >
+                      <div className="flex items-center gap-1">
+                        Tipo
+                        {sortField === 'tipo' && (
+                          <span>{sortDirection === 'asc' ? '↑' : '↓'}</span>
+                        )}
+                      </div>
                     </th>
                     <th className="px-4 sm:px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Acciones
@@ -397,7 +483,7 @@ export default function CancelacionesPage() {
             {totalPages > 1 && (
               <div className="bg-white px-4 py-3 border-t border-gray-200 flex flex-col sm:flex-row items-center justify-between gap-4">
                 <div className="text-sm text-gray-700">
-                  Mostrando {startIndex + 1} a {Math.min(endIndex, filteredCancelaciones.length)} de {filteredCancelaciones.length} cancelaciones
+                  Mostrando {startIndex + 1} a {Math.min(endIndex, sortedCancelaciones.length)} de {sortedCancelaciones.length} cancelaciones
                 </div>
                 <div className="flex items-center gap-2">
                   <button

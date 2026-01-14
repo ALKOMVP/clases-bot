@@ -43,6 +43,8 @@ function UsuariosPageContent() {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(12); // 12 items por página
   const [filterStatus, setFilterStatus] = useState<'all' | 'activos' | 'desactivados'>('all');
+  const [sortField, setSortField] = useState<string | null>(null);
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
   const [formData, setFormData] = useState<{
     id: number;
     nombre: string;
@@ -402,11 +404,54 @@ function UsuariosPageContent() {
     );
   });
 
-  // Calcular paginación DESPUÉS de aplicar filtros
-  const totalPages = Math.ceil(filteredUsuarios.length / itemsPerPage);
+  // Ordenar usuarios DESPUÉS de aplicar filtros
+  const sortedUsuarios = [...filteredUsuarios].sort((a, b) => {
+    if (!sortField) return 0;
+
+    let aValue: any;
+    let bValue: any;
+
+    switch (sortField) {
+      case 'nombre':
+        aValue = (a.nombre || '').toLowerCase();
+        bValue = (b.nombre || '').toLowerCase();
+        break;
+      case 'apellido':
+        aValue = (a.apellido || '').toLowerCase();
+        bValue = (b.apellido || '').toLowerCase();
+        break;
+      case 'telefono':
+        aValue = (a.telefono || '').toLowerCase();
+        bValue = (b.telefono || '').toLowerCase();
+        break;
+      case 'estado':
+        aValue = a.activo ? 1 : 0;
+        bValue = b.activo ? 1 : 0;
+        break;
+      default:
+        return 0;
+    }
+
+    if (aValue < bValue) return sortDirection === 'asc' ? -1 : 1;
+    if (aValue > bValue) return sortDirection === 'asc' ? 1 : -1;
+    return 0;
+  });
+
+  // Calcular paginación DESPUÉS de aplicar filtros y ordenamiento
+  const totalPages = Math.ceil(sortedUsuarios.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
   const endIndex = startIndex + itemsPerPage;
-  const paginatedUsuarios = filteredUsuarios.slice(startIndex, endIndex);
+  const paginatedUsuarios = sortedUsuarios.slice(startIndex, endIndex);
+
+  const handleSort = (field: string) => {
+    if (sortField === field) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortDirection('asc');
+    }
+    setCurrentPage(1);
+  };
 
   // Resetear a página 1 cuando cambia el término de búsqueda o el filtro de estado
   useEffect(() => {
@@ -501,7 +546,7 @@ function UsuariosPageContent() {
           </div>
           {(searchTerm || filterStatus !== 'all') && (
             <p className="text-sm text-gray-600">
-              Mostrando {filteredUsuarios.length} de {usuarios.length} alumnos
+              Mostrando {sortedUsuarios.length} de {usuarios.length} alumnos
             </p>
           )}
         </div>
@@ -600,11 +645,51 @@ function UsuariosPageContent() {
             <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-4 sm:px-6 py-2 text-left text-xs font-medium text-gray-500 uppercase">Nombre</th>
-                <th className="px-4 sm:px-6 py-2 text-left text-xs font-medium text-gray-500 uppercase">Apellido</th>
-                <th className="px-4 sm:px-6 py-2 text-left text-xs font-medium text-gray-500 uppercase hidden md:table-cell">Teléfono</th>
+                <th 
+                  className="px-4 sm:px-6 py-2 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none"
+                  onClick={() => handleSort('nombre')}
+                >
+                  <div className="flex items-center gap-1">
+                    Nombre
+                    {sortField === 'nombre' && (
+                      <span>{sortDirection === 'asc' ? '↑' : '↓'}</span>
+                    )}
+                  </div>
+                </th>
+                <th 
+                  className="px-4 sm:px-6 py-2 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none"
+                  onClick={() => handleSort('apellido')}
+                >
+                  <div className="flex items-center gap-1">
+                    Apellido
+                    {sortField === 'apellido' && (
+                      <span>{sortDirection === 'asc' ? '↑' : '↓'}</span>
+                    )}
+                  </div>
+                </th>
+                <th 
+                  className="px-4 sm:px-6 py-2 text-left text-xs font-medium text-gray-500 uppercase hidden md:table-cell cursor-pointer hover:bg-gray-100 select-none"
+                  onClick={() => handleSort('telefono')}
+                >
+                  <div className="flex items-center gap-1">
+                    Teléfono
+                    {sortField === 'telefono' && (
+                      <span>{sortDirection === 'asc' ? '↑' : '↓'}</span>
+                    )}
+                  </div>
+                </th>
                 <th className="px-4 sm:px-6 py-2 text-left text-xs font-medium text-gray-500 uppercase hidden lg:table-cell">Clases Inscritas</th>
-                <th className="px-4 sm:px-6 py-2 text-left text-xs font-medium text-gray-500 uppercase">Estado</th>
+                <th 
+                  className="px-4 sm:px-6 py-2 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none"
+                  onClick={() => handleSort('estado')}
+                >
+                  <div className="flex items-center gap-1">
+                    Estado
+                    {sortField === 'estado' && (
+                      <span>{sortDirection === 'asc' ? '↑' : '↓'}</span>
+                    )}
+                  </div>
+                </th>
                 <th className="px-4 sm:px-6 py-2 text-left text-xs font-medium text-gray-500 uppercase">Acciones</th>
               </tr>
             </thead>
@@ -694,7 +779,7 @@ function UsuariosPageContent() {
           {totalPages > 1 && (
             <div className="bg-white px-4 py-3 border-t border-gray-200 flex flex-col sm:flex-row items-center justify-between gap-4">
               <div className="text-sm text-gray-700">
-                Mostrando {startIndex + 1} a {Math.min(endIndex, filteredUsuarios.length)} de {filteredUsuarios.length} alumnos
+                Mostrando {startIndex + 1} a {Math.min(endIndex, sortedUsuarios.length)} de {sortedUsuarios.length} alumnos
               </div>
               <div className="flex items-center gap-2">
                 <button
