@@ -26,6 +26,8 @@ export default function CancelacionesPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [tipoFiltro, setTipoFiltro] = useState<string>('todas'); // 'todas', 'fija', 'temporal'
   const [showDebugButtons, setShowDebugButtons] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage] = useState(12); // 12 items por página
 
   // Ctrl+D para mostrar botones de debug
   useEffect(() => {
@@ -216,6 +218,17 @@ export default function CancelacionesPage() {
     );
   });
 
+  // Calcular paginación DESPUÉS de aplicar filtros
+  const totalPages = Math.ceil(filteredCancelaciones.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const paginatedCancelaciones = filteredCancelaciones.slice(startIndex, endIndex);
+
+  // Resetear a página 1 cuando cambia el término de búsqueda o el filtro de tipo
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, tipoFiltro]);
+
   return (
     <div className="min-h-screen bg-gray-50 overflow-x-hidden">
       <Navbar />
@@ -329,7 +342,7 @@ export default function CancelacionesPage() {
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {filteredCancelaciones.map((cancelacion, index) => (
+                  {paginatedCancelaciones.map((cancelacion, index) => (
                     <tr key={`${cancelacion.usuario_id}-${cancelacion.clase_id}-${cancelacion.fecha_clase}-${index}`} className="hover:bg-gray-50">
                       <td className="px-4 sm:px-6 py-4 whitespace-nowrap">
                         <div className="text-sm font-medium text-gray-900">
@@ -380,6 +393,57 @@ export default function CancelacionesPage() {
                 </tbody>
               </table>
             </TableScrollContainer>
+            {/* Controles de paginación */}
+            {totalPages > 1 && (
+              <div className="bg-white px-4 py-3 border-t border-gray-200 flex flex-col sm:flex-row items-center justify-between gap-4">
+                <div className="text-sm text-gray-700">
+                  Mostrando {startIndex + 1} a {Math.min(endIndex, filteredCancelaciones.length)} de {filteredCancelaciones.length} cancelaciones
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                    disabled={currentPage === 1}
+                    className="px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Anterior
+                  </button>
+                  <div className="flex items-center gap-1">
+                    {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                      let pageNum;
+                      if (totalPages <= 5) {
+                        pageNum = i + 1;
+                      } else if (currentPage <= 3) {
+                        pageNum = i + 1;
+                      } else if (currentPage >= totalPages - 2) {
+                        pageNum = totalPages - 4 + i;
+                      } else {
+                        pageNum = currentPage - 2 + i;
+                      }
+                      return (
+                        <button
+                          key={pageNum}
+                          onClick={() => setCurrentPage(pageNum)}
+                          className={`px-3 py-2 text-sm font-medium rounded-lg ${
+                            currentPage === pageNum
+                              ? 'bg-purple-600 text-white'
+                              : 'text-gray-700 bg-white border border-gray-300 hover:bg-gray-50'
+                          }`}
+                        >
+                          {pageNum}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <button
+                    onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                    disabled={currentPage === totalPages}
+                    className="px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Siguiente
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>

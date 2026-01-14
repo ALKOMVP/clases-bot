@@ -33,6 +33,12 @@
       "namedRegex": "^/_not\\-found(?:/)?$"
     },
     {
+      "page": "/asignaciones-temporales",
+      "regex": "^/asignaciones\\-temporales(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/asignaciones\\-temporales(?:/)?$"
+    },
+    {
       "page": "/calendario",
       "regex": "^/calendario(?:/)?$",
       "routeKeys": {},

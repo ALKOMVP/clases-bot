@@ -22,6 +22,8 @@ export default function AsignacionesTemporalesPage() {
   const [loading, setLoading] = useState(true);
   const [undoingKey, setUndoingKey] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage] = useState(12); // 12 items por página
 
   useEffect(() => {
     loadAsignaciones();
@@ -105,6 +107,35 @@ export default function AsignacionesTemporalesPage() {
     }
   };
 
+  const formatFechaClaseConHora = (fecha: string, hora: string) => {
+    if (!fecha) return '-';
+    try {
+      // Parsear la hora (formato esperado: "HH:MM" o "HH:MM:SS")
+      let horaFormateada = hora || '';
+      if (horaFormateada && !horaFormateada.includes(':')) {
+        horaFormateada = '';
+      }
+      
+      // Crear fecha con hora
+      const fechaHora = horaFormateada 
+        ? new Date(fecha + 'T' + horaFormateada + ':00')
+        : new Date(fecha + 'T00:00:00');
+      
+      return fechaHora.toLocaleString('es-AR', {
+        weekday: 'long',
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+        timeZone: 'America/Argentina/Buenos_Aires'
+      });
+    } catch (error) {
+      return fecha + (hora ? ' ' + hora : '');
+    }
+  };
+
   const formatCreatedAt = (createdAt: string | undefined) => {
     if (!createdAt) return '-';
     try {
@@ -155,6 +186,17 @@ export default function AsignacionesTemporalesPage() {
       fechaClase.includes(search)
     );
   });
+
+  // Calcular paginación DESPUÉS de aplicar filtros
+  const totalPages = Math.ceil(filteredAsignaciones.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const paginatedAsignaciones = filteredAsignaciones.slice(startIndex, endIndex);
+
+  // Resetear a página 1 cuando cambia el término de búsqueda
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm]);
 
   return (
     <div className="min-h-screen bg-gray-50 overflow-x-hidden">
@@ -233,11 +275,8 @@ export default function AsignacionesTemporalesPage() {
                     <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Alumno
                     </th>
-                    <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden md:table-cell">
-                      Clase
-                    </th>
                     <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Fecha Asignada
+                      Clase Asignada
                     </th>
                     <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden lg:table-cell">
                       Fecha de Asignación
@@ -248,26 +287,26 @@ export default function AsignacionesTemporalesPage() {
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {filteredAsignaciones.map((asignacion, index) => (
+                  {paginatedAsignaciones.map((asignacion, index) => (
                     <tr key={`${asignacion.usuario_id}-${asignacion.clase_id}-${asignacion.fecha_clase}-${index}`} className="hover:bg-gray-50">
                       <td className="px-4 sm:px-6 py-4 whitespace-nowrap">
                         <div className="text-sm font-medium text-gray-900">
                           {asignacion.usuario_apellido || 'N/A'}, {asignacion.usuario_nombre || 'N/A'}
                         </div>
                       </td>
-                      <td className="px-4 sm:px-6 py-4 whitespace-nowrap hidden md:table-cell">
+                      <td className="px-4 sm:px-6 py-4">
                         <div className="text-sm text-gray-900">
-                          {asignacion.clase_dia ? getDiaNombre(asignacion.clase_dia) : 'N/A'} {asignacion.clase_hora || ''}
-                        </div>
-                        {asignacion.clase_nombre && (
-                          <div className="text-xs text-gray-500">
-                            {asignacion.clase_nombre}
+                          <div className="font-medium">
+                            {asignacion.clase_dia ? getDiaNombre(asignacion.clase_dia) : 'N/A'} {asignacion.clase_hora || ''}
                           </div>
-                        )}
-                      </td>
-                      <td className="px-4 sm:px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-gray-900">
-                          {formatFechaClase(asignacion.fecha_clase)}
+                          {asignacion.clase_nombre && (
+                            <div className="text-xs text-gray-500 mb-1">
+                              {asignacion.clase_nombre}
+                            </div>
+                          )}
+                          <div className="text-xs text-gray-600">
+                            {formatFechaClaseConHora(asignacion.fecha_clase, asignacion.clase_hora || '')}
+                          </div>
                         </div>
                       </td>
                       <td className="px-4 sm:px-6 py-4 whitespace-nowrap text-sm text-gray-500 hidden lg:table-cell">
@@ -288,6 +327,57 @@ export default function AsignacionesTemporalesPage() {
                 </tbody>
               </table>
             </TableScrollContainer>
+            {/* Controles de paginación */}
+            {totalPages > 1 && (
+              <div className="bg-white px-4 py-3 border-t border-gray-200 flex flex-col sm:flex-row items-center justify-between gap-4">
+                <div className="text-sm text-gray-700">
+                  Mostrando {startIndex + 1} a {Math.min(endIndex, filteredAsignaciones.length)} de {filteredAsignaciones.length} asignaciones
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                    disabled={currentPage === 1}
+                    className="px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Anterior
+                  </button>
+                  <div className="flex items-center gap-1">
+                    {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                      let pageNum;
+                      if (totalPages <= 5) {
+                        pageNum = i + 1;
+                      } else if (currentPage <= 3) {
+                        pageNum = i + 1;
+                      } else if (currentPage >= totalPages - 2) {
+                        pageNum = totalPages - 4 + i;
+                      } else {
+                        pageNum = currentPage - 2 + i;
+                      }
+                      return (
+                        <button
+                          key={pageNum}
+                          onClick={() => setCurrentPage(pageNum)}
+                          className={`px-3 py-2 text-sm font-medium rounded-lg ${
+                            currentPage === pageNum
+                              ? 'bg-purple-600 text-white'
+                              : 'text-gray-700 bg-white border border-gray-300 hover:bg-gray-50'
+                          }`}
+                        >
+                          {pageNum}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <button
+                    onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                    disabled={currentPage === totalPages}
+                    className="px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Siguiente
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
