@@ -98,7 +98,7 @@ async function enviarTemplateConfirmarReserva(to: string): Promise<boolean> {
 }
 
 async function promoverDeListaEsperaSimple(db: any, claseId: number, fechaISO: string): Promise<void> {
-  console.log(`[promoverDeListaEsperaSimple] Iniciando promoción para clase ${claseId}, fecha ${fechaISO}`);
+  console.log(`[promoverDeListaEsperaSimple] 🚀 Iniciando promoción para clase ${claseId}, fecha ${fechaISO}`);
   
   // Si la tabla no existe, salir
   let primero: any = null;
@@ -109,73 +109,109 @@ async function promoverDeListaEsperaSimple(db: any, claseId: number, fechaISO: s
       ORDER BY numero ASC
       LIMIT 1
     `).bind(claseId, fechaISO).first();
+    console.log(`[promoverDeListaEsperaSimple] Consulta lista_espera ejecutada. Resultado:`, primero ? `Usuario ${primero.usuario_id} encontrado` : 'Ninguno');
   } catch (e: any) {
-    console.log(`[promoverDeListaEsperaSimple] Error accediendo a lista_espera:`, e?.message || e);
-    return;
+    console.error(`[promoverDeListaEsperaSimple] ❌ Error accediendo a lista_espera:`, e?.message || e);
+    throw e; // Re-lanzar el error para que se capture en el nivel superior
   }
   if (!primero) {
-    console.log(`[promoverDeListaEsperaSimple] No hay nadie en lista de espera para clase ${claseId}, fecha ${fechaISO}`);
+    console.log(`[promoverDeListaEsperaSimple] ℹ️ No hay nadie en lista de espera para clase ${claseId}, fecha ${fechaISO}`);
     return;
   }
 
   // Chequear cupo actual
   const cupoMaximo = 35;
-  const reservasFijasQuery = await db.prepare(`
-    SELECT COUNT(DISTINCT r.usuario_id) as count
-    FROM reserva r
-    WHERE r.clase_id = ?
-      AND (r.fecha_clase IS NULL OR r.fecha_clase = 'null' OR r.fecha_clase = '')
-      AND (r.es_reasignacion IS NULL OR r.es_reasignacion = 0)
-      AND NOT EXISTS (
-        SELECT 1 FROM cancelacion c
-        WHERE c.usuario_id = r.usuario_id
-          AND c.clase_id = r.clase_id
-          AND c.fecha_clase = ?
-      )
-  `).bind(claseId, fechaISO).first();
-  const countFijas = Number((reservasFijasQuery as any)?.count || 0);
-
-  const reservasTemporalesQuery = await db.prepare(`
-    SELECT COUNT(DISTINCT r.usuario_id) as count
-    FROM reserva r
-    WHERE r.clase_id = ? AND r.fecha_clase = ? AND r.es_reasignacion = 1
-      AND NOT EXISTS (
-        SELECT 1 FROM cancelacion c
-        WHERE c.usuario_id = r.usuario_id
-          AND c.clase_id = r.clase_id
-          AND c.fecha_clase = r.fecha_clase
-      )
-  `).bind(claseId, fechaISO).first();
-  const countTemporales = Number((reservasTemporalesQuery as any)?.count || 0);
-
-  const totalInscritos = countFijas + countTemporales;
-  console.log(`[promoverDeListaEsperaSimple] Cupo actual: ${totalInscritos}/${cupoMaximo} (fijas: ${countFijas}, temporales: ${countTemporales})`);
+  let countFijas = 0;
+  let countTemporales = 0;
   
-  if (totalInscritos >= cupoMaximo) {
-    console.log(`[promoverDeListaEsperaSimple] Cupo completo, no se puede promover`);
-    return;
+  try {
+    const reservasFijasQuery = await db.prepare(`
+      SELECT COUNT(DISTINCT r.usuario_id) as count
+      FROM reserva r
+      WHERE r.clase_id = ?
+        AND (r.fecha_clase IS NULL OR r.fecha_clase = 'null' OR r.fecha_clase = '')
+        AND (r.es_reasignacion IS NULL OR r.es_reasignacion = 0)
+        AND NOT EXISTS (
+          SELECT 1 FROM cancelacion c
+          WHERE c.usuario_id = r.usuario_id
+            AND c.clase_id = r.clase_id
+            AND c.fecha_clase = ?
+        )
+    `).bind(claseId, fechaISO).first();
+    countFijas = Number((reservasFijasQuery as any)?.count || 0);
+    console.log(`[promoverDeListaEsperaSimple] Reservas fijas (sin cancelaciones): ${countFijas}`);
+  } catch (e: any) {
+    console.error(`[promoverDeListaEsperaSimple] ❌ Error contando reservas fijas:`, e?.message || e);
+    throw e;
   }
 
+  try {
+    const reservasTemporalesQuery = await db.prepare(`
+      SELECT COUNT(DISTINCT r.usuario_id) as count
+      FROM reserva r
+      WHERE r.clase_id = ? AND r.fecha_clase = ? AND r.es_reasignacion = 1
+        AND NOT EXISTS (
+          SELECT 1 FROM cancelacion c
+          WHERE c.usuario_id = r.usuario_id
+            AND c.clase_id = r.clase_id
+            AND c.fecha_clase = r.fecha_clase
+        )
+    `).bind(claseId, fechaISO).first();
+    countTemporales = Number((reservasTemporalesQuery as any)?.count || 0);
+    console.log(`[promoverDeListaEsperaSimple] Reservas temporales (sin cancelaciones): ${countTemporales}`);
+  } catch (e: any) {
+    console.error(`[promoverDeListaEsperaSimple] ❌ Error contando reservas temporales:`, e?.message || e);
+    throw e;
+  }
+
+  const totalInscritos = countFijas + countTemporales;
+  console.log(`[promoverDeListaEsperaSimple] 📊 Cupo actual: ${totalInscritos}/${cupoMaximo} (fijas: ${countFijas}, temporales: ${countTemporales})`);
+  
+  if (totalInscritos >= cupoMaximo) {
+    console.log(`[promoverDeListaEsperaSimple] ⚠️ Cupo completo (${totalInscritos}/${cupoMaximo}), no se puede promover`);
+    return;
+  }
+  
+  console.log(`[promoverDeListaEsperaSimple] ✅ Hay cupo disponible (${totalInscritos}/${cupoMaximo}), procediendo con promoción...`);
+
   const usuarioId = Number(primero.usuario_id);
-  console.log(`[promoverDeListaEsperaSimple] Promoviendo usuario ${usuarioId} de lista de espera`);
+  console.log(`[promoverDeListaEsperaSimple] 👤 Promoviendo usuario ${usuarioId} de lista de espera`);
 
   // Evitar duplicado
-  const existe = await db.prepare(`
-    SELECT * FROM reserva
-    WHERE usuario_id = ? AND clase_id = ? AND fecha_clase = ? AND es_reasignacion = 1
-  `).bind(usuarioId, claseId, fechaISO).first();
+  let existe: any = null;
+  try {
+    existe = await db.prepare(`
+      SELECT * FROM reserva
+      WHERE usuario_id = ? AND clase_id = ? AND fecha_clase = ? AND es_reasignacion = 1
+    `).bind(usuarioId, claseId, fechaISO).first();
+    console.log(`[promoverDeListaEsperaSimple] Verificación de duplicado: ${existe ? 'Ya existe reserva temporal' : 'No existe, se creará nueva'}`);
+  } catch (e: any) {
+    console.error(`[promoverDeListaEsperaSimple] ❌ Error verificando duplicado:`, e?.message || e);
+    throw e;
+  }
 
-  // Sacar de lista igual
-  await db.prepare(`DELETE FROM lista_espera WHERE usuario_id = ? AND clase_id = ? AND fecha_clase = ?`)
-    .bind(usuarioId, claseId, fechaISO)
-    .run();
+  // Sacar de lista igual (hacerlo primero para evitar problemas de concurrencia)
+  try {
+    await db.prepare(`DELETE FROM lista_espera WHERE usuario_id = ? AND clase_id = ? AND fecha_clase = ?`)
+      .bind(usuarioId, claseId, fechaISO)
+      .run();
+    console.log(`[promoverDeListaEsperaSimple] ✅ Usuario ${usuarioId} eliminado de lista de espera`);
+  } catch (e: any) {
+    console.error(`[promoverDeListaEsperaSimple] ❌ Error eliminando de lista de espera:`, e?.message || e);
+    throw e;
+  }
 
   if (!existe) {
-    await db.prepare(`
-      INSERT INTO reserva (usuario_id, clase_id, fecha_clase, es_reasignacion, created_at)
-      VALUES (?, ?, ?, 1, datetime('now'))
-    `).bind(usuarioId, claseId, fechaISO).run();
-    console.log(`[promoverDeListaEsperaSimple] ✅ Reserva temporal creada para usuario ${usuarioId}`);
+    try {
+      await db.prepare(`
+        INSERT INTO reserva (usuario_id, clase_id, fecha_clase, es_reasignacion, created_at)
+        VALUES (?, ?, ?, 1, datetime('now'))
+      `).bind(usuarioId, claseId, fechaISO).run();
+      console.log(`[promoverDeListaEsperaSimple] ✅ Reserva temporal creada para usuario ${usuarioId}`);
+    } catch (e: any) {
+      console.error(`[promoverDeListaEsperaSimple] ❌ Error creando reserva temporal:`, e?.message || e);
+      throw e;
+    }
 
     // IMPORTANTE: Consumir 1 clase a recuperar si el usuario tiene disponibles
     try {
@@ -222,18 +258,23 @@ async function promoverDeListaEsperaSimple(db: any, claseId: number, fechaISO: s
     `).bind(i + 1, items[i].usuario_id, claseId, fechaISO).run();
   }
 
-  // Enviar template confirmar_reserva
-  const u = await db.prepare(`SELECT telefono FROM usuario WHERE id = ?`).bind(usuarioId).first();
-  const telefonoRaw = (u as any)?.telefono ? String((u as any).telefono) : '';
-  const to = normalizarTelefonoWhatsAppSimple(telefonoRaw);
-  if (to) {
-    const enviado = await enviarTemplateConfirmarReserva(to);
-    console.log(`[promoverDeListaEsperaSimple] ${enviado ? '✅' : '❌'} Template de confirmación ${enviado ? 'enviado' : 'falló'} a usuario ${usuarioId}`);
-  } else {
-    console.log(`[promoverDeListaEsperaSimple] ⚠️ No se pudo enviar template: teléfono vacío para usuario ${usuarioId}`);
+  // Enviar template confirmar_reserva (no crítico si falla)
+  try {
+    const u = await db.prepare(`SELECT telefono FROM usuario WHERE id = ?`).bind(usuarioId).first();
+    const telefonoRaw = (u as any)?.telefono ? String((u as any).telefono) : '';
+    const to = normalizarTelefonoWhatsAppSimple(telefonoRaw);
+    if (to) {
+      const enviado = await enviarTemplateConfirmarReserva(to);
+      console.log(`[promoverDeListaEsperaSimple] ${enviado ? '✅' : '❌'} Template de confirmación ${enviado ? 'enviado' : 'falló'} a usuario ${usuarioId} (tel: ${to})`);
+    } else {
+      console.log(`[promoverDeListaEsperaSimple] ⚠️ No se pudo enviar template: teléfono vacío para usuario ${usuarioId}`);
+    }
+  } catch (templateError: any) {
+    // No es crítico si falla el envío del template, pero loguear
+    console.warn(`[promoverDeListaEsperaSimple] ⚠️ Error enviando template (no crítico):`, templateError?.message || templateError);
   }
   
-  console.log(`[promoverDeListaEsperaSimple] ✅ Promoción completada para usuario ${usuarioId}`);
+  console.log(`[promoverDeListaEsperaSimple] ✅✅✅ Promoción COMPLETADA exitosamente para usuario ${usuarioId}`);
 }
 
 // Helper para obtener la base de datos
@@ -932,18 +973,36 @@ async function procesarCancelacion(db: any, usuarioId: number, claseId: number, 
         DELETE FROM reserva
         WHERE usuario_id = ? AND clase_id = ? AND fecha_clase = ? AND es_reasignacion = 1
       `).bind(usuarioId, claseId, fechaClase).run();
+      console.log('[procesarCancelacion] ✅ Reserva temporal eliminada:', { usuarioId, claseId, fechaClase });
 
       // Cupo liberado -> promover lista de espera si corresponde (con template al promovido)
-      await promoverDeListaEsperaSimple(db, claseId, fechaClase);
+      // IMPORTANTE: Envolver en try-catch para asegurar que si falla, al menos se loguee el error
+      try {
+        console.log('[procesarCancelacion] Intentando promover de lista de espera (temporal)...');
+        await promoverDeListaEsperaSimple(db, claseId, fechaClase);
+        console.log('[procesarCancelacion] ✅ Promoción de lista de espera completada (o no había nadie)');
+      } catch (promoError: any) {
+        console.error('[procesarCancelacion] ❌ ERROR al promover de lista de espera:', promoError?.message || promoError);
+        // No fallar la cancelación si la promoción falla, pero loguear el error
+      }
     } else {
       // Cancelación de fija: crear registro de cancelación para esa fecha
       await db.prepare(`
         INSERT INTO cancelacion (usuario_id, clase_id, fecha_clase, created_at)
         VALUES (?, ?, ?, datetime('now'))
       `).bind(usuarioId, claseId, fechaClase).run();
+      console.log('[procesarCancelacion] ✅ Cancelación de reserva fija creada:', { usuarioId, claseId, fechaClase });
 
       // Cupo liberado -> promover lista de espera si corresponde (con template al promovido)
-      await promoverDeListaEsperaSimple(db, claseId, fechaClase);
+      // IMPORTANTE: Envolver en try-catch para asegurar que si falla, al menos se loguee el error
+      try {
+        console.log('[procesarCancelacion] Intentando promover de lista de espera...');
+        await promoverDeListaEsperaSimple(db, claseId, fechaClase);
+        console.log('[procesarCancelacion] ✅ Promoción de lista de espera completada (o no había nadie)');
+      } catch (promoError: any) {
+        console.error('[procesarCancelacion] ❌ ERROR al promover de lista de espera:', promoError?.message || promoError);
+        // No fallar la cancelación si la promoción falla, pero loguear el error
+      }
     }
     
     // Crear clase a recuperar (vencimiento en 30 días)
