@@ -750,10 +750,11 @@ function formatearFilaClase(fecha: Date, hora: string): string {
   return `${dia} ${hora} ${diaNum} ${mes}`;
 }
 
-// Helper: determinar si una clase/fecha tiene cupo completo (considerando cancelaciones de fijos)
+// Helper: determinar si una clase/fecha tiene cupo completo (considerando cancelaciones de fijos Y temporales)
 async function isCupoCompleto(db: any, claseId: number, fechaISO: string): Promise<boolean> {
   const cupoMaximo = 35;
 
+  // Contar reservas fijas EXCLUYENDO las que tienen cancelación para esta fecha
   const reservasFijasQuery = await db.prepare(`
     SELECT COUNT(DISTINCT r.usuario_id) as count
     FROM reserva r
@@ -770,15 +771,25 @@ async function isCupoCompleto(db: any, claseId: number, fechaISO: string): Promi
 
   const countFijas = Number((reservasFijasQuery as any)?.count || 0);
 
+  // Contar reservas temporales EXCLUYENDO las canceladas
   const reservasTemporalesQuery = await db.prepare(`
-    SELECT COUNT(DISTINCT usuario_id) as count
-    FROM reserva
-    WHERE clase_id = ? AND fecha_clase = ? AND es_reasignacion = 1
+    SELECT COUNT(DISTINCT r.usuario_id) as count
+    FROM reserva r
+    WHERE r.clase_id = ? AND r.fecha_clase = ? AND r.es_reasignacion = 1
+      AND NOT EXISTS (
+        SELECT 1 FROM cancelacion c
+        WHERE c.usuario_id = r.usuario_id
+          AND c.clase_id = r.clase_id
+          AND c.fecha_clase = r.fecha_clase
+      )
   `).bind(claseId, fechaISO).first();
 
   const countTemporales = Number((reservasTemporalesQuery as any)?.count || 0);
 
-  return (countFijas + countTemporales) >= cupoMaximo;
+  const totalInscritos = countFijas + countTemporales;
+  console.log(`[isCupoCompleto] Clase ${claseId}, fecha ${fechaISO}: ${totalInscritos}/${cupoMaximo} (fijas: ${countFijas}, temporales: ${countTemporales})`);
+  
+  return totalInscritos >= cupoMaximo;
 }
 
 // Handler para "Ver mis clases"
@@ -1229,23 +1240,40 @@ export async function POST(request: NextRequest) {
                 continue;
               }
 
-              // Cupo: fijos + temporales confirmados
+              // Cupo: fijos + temporales confirmados EXCLUYENDO cancelaciones
+              // IMPORTANTE: Debe coincidir con la lógica de /api/reservas/temporal
               const fijas = await db.prepare(`
-                SELECT COUNT(DISTINCT usuario_id) as count
-                FROM reserva
-                WHERE clase_id = ?
-                  AND (fecha_clase IS NULL OR fecha_clase = 'null' OR fecha_clase = '')
-                  AND (es_reasignacion IS NULL OR es_reasignacion = 0)
-              `).bind(claseId).first();
+                SELECT COUNT(DISTINCT r.usuario_id) as count
+                FROM reserva r
+                WHERE r.clase_id = ?
+                  AND (r.fecha_clase IS NULL OR r.fecha_clase = 'null' OR r.fecha_clase = '')
+                  AND (r.es_reasignacion IS NULL OR r.es_reasignacion = 0)
+                  AND NOT EXISTS (
+                    SELECT 1 FROM cancelacion c
+                    WHERE c.usuario_id = r.usuario_id
+                      AND c.clase_id = r.clase_id
+                      AND c.fecha_clase = ?
+                  )
+              `).bind(claseId, fechaClase).first();
 
               const temporales = await db.prepare(`
-                SELECT COUNT(DISTINCT usuario_id) as count
-                FROM reserva
-                WHERE clase_id = ? AND fecha_clase = ? AND es_reasignacion = 1
+                SELECT COUNT(DISTINCT r.usuario_id) as count
+                FROM reserva r
+                WHERE r.clase_id = ? AND r.fecha_clase = ? AND r.es_reasignacion = 1
+                  AND NOT EXISTS (
+                    SELECT 1 FROM cancelacion c
+                    WHERE c.usuario_id = r.usuario_id
+                      AND c.clase_id = r.clase_id
+                      AND c.fecha_clase = r.fecha_clase
+                  )
               `).bind(claseId, fechaClase).first();
 
               const cupoMaximo = 35;
-              const totalConfirmados = Number((fijas as any)?.count || 0) + Number((temporales as any)?.count || 0);
+              const countFijas = Number((fijas as any)?.count || 0);
+              const countTemporales = Number((temporales as any)?.count || 0);
+              const totalConfirmados = countFijas + countTemporales;
+              
+              console.log(`[reservar_clase] Cupo calculado para clase ${claseId}, fecha ${fechaClase}: ${totalConfirmados}/${cupoMaximo} (fijas: ${countFijas}, temporales: ${countTemporales})`);
 
               if (totalConfirmados >= cupoMaximo) {
                 // Lista de espera (si existe tabla)

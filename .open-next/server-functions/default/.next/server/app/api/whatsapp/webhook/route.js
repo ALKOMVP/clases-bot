@@ -1,53 +1,53 @@
-(()=>{var a={};a.id=274,a.ids=[274],a.modules={261:a=>{"use strict";a.exports=require("next/dist/shared/lib/router/utils/app-paths")},846:a=>{"use strict";a.exports=require("next/dist/compiled/next-server/app-page.runtime.prod.js")},3033:a=>{"use strict";a.exports=require("next/dist/server/app-render/work-unit-async-storage.external.js")},3295:a=>{"use strict";a.exports=require("next/dist/server/app-render/after-task-async-storage.external.js")},4870:a=>{"use strict";a.exports=require("next/dist/compiled/next-server/app-route.runtime.prod.js")},6439:a=>{"use strict";a.exports=require("next/dist/shared/lib/no-fallback-error.external")},6487:()=>{},6640:(a,b,c)=>{"use strict";c.r(b),c.d(b,{handler:()=>Y,patchFetch:()=>X,routeModule:()=>T,serverHooks:()=>W,workAsyncStorage:()=>U,workUnitAsyncStorage:()=>V});var d={};c.r(d),c.d(d,{GET:()=>R,POST:()=>S});var e=c(6559),f=c(8088),g=c(7719),h=c(6191),i=c(1289),j=c(261),k=c(2603),l=c(9893),m=c(4823),n=c(7220),o=c(6946),p=c(7912),q=c(9786),r=c(6143),s=c(6439),t=c(3365),u=c(2190);let v=process.env.WHATSAPP_TOKEN||"",w=process.env.PHONE_NUMBER_ID||"",x=process.env.VERIFY_TOKEN||"";function y(a,b){try{let[c,d,e]=a.split("-").map(a=>parseInt(a,10)),[f,g]=b.split(":").map(a=>parseInt(a,10));if(!c||!d||!e||Number.isNaN(f)||Number.isNaN(g))return null;return Date.UTC(c,d-1,e,f+3,g,0,0)}catch{return null}}function z(a,b){let c=y(a,b);return!!c&&Date.now()<c-36e5}async function A(a){if(!v||!w)return!1;let b=function(){let a=(process.env.WHATSAPP_CONFIRMAR_RESERVA_TEMPLATE||process.env.WHATSAPP_TEMPLATE_NAME||"").trim();return a&&"hello_world"!==a?a:"confirmar_reserva"}();for(let c of function(){let a=[(process.env.WHATSAPP_TEMPLATE_LANG||"").trim(),"es_AR","es","es_ES"].filter(Boolean),b=new Set;return a.filter(a=>!b.has(a)&&(b.add(a),!0))}())try{let d=await fetch(`https://graph.facebook.com/v18.0/${w}/messages`,{method:"POST",headers:{Authorization:`Bearer ${v}`,"Content-Type":"application/json"},body:JSON.stringify({messaging_product:"whatsapp",to:a,type:"template",template:{name:b,language:{code:c}}})});if(d.ok)return!0;let e=await d.text();console.error("[enviarTemplateConfirmarReserva] Error",{status:d.status,to:a,templateName:b,lang:c,body:e})}catch(a){console.error("[enviarTemplateConfirmarReserva] Exception",a?.message||a)}return!1}async function B(a,b,c){console.log(`[promoverDeListaEsperaSimple] Iniciando promoci\xf3n para clase ${b}, fecha ${c}`);let d=null;try{d=await a.prepare(`
+(()=>{var a={};a.id=274,a.ids=[274],a.modules={261:a=>{"use strict";a.exports=require("next/dist/shared/lib/router/utils/app-paths")},846:a=>{"use strict";a.exports=require("next/dist/compiled/next-server/app-page.runtime.prod.js")},3033:a=>{"use strict";a.exports=require("next/dist/server/app-render/work-unit-async-storage.external.js")},3295:a=>{"use strict";a.exports=require("next/dist/server/app-render/after-task-async-storage.external.js")},4870:a=>{"use strict";a.exports=require("next/dist/compiled/next-server/app-route.runtime.prod.js")},6439:a=>{"use strict";a.exports=require("next/dist/shared/lib/no-fallback-error.external")},6487:()=>{},6640:(a,b,c)=>{"use strict";c.r(b),c.d(b,{handler:()=>Y,patchFetch:()=>X,routeModule:()=>T,serverHooks:()=>W,workAsyncStorage:()=>U,workUnitAsyncStorage:()=>V});var d={};c.r(d),c.d(d,{GET:()=>R,POST:()=>S});var e=c(6559),f=c(8088),g=c(7719),h=c(6191),i=c(1289),j=c(261),k=c(2603),l=c(9893),m=c(4823),n=c(7220),o=c(6946),p=c(7912),q=c(9786),r=c(6143),s=c(6439),t=c(3365),u=c(2190);let v=process.env.WHATSAPP_TOKEN||"",w=process.env.PHONE_NUMBER_ID||"",x=process.env.VERIFY_TOKEN||"";function y(a,b){try{let[c,d,e]=a.split("-").map(a=>parseInt(a,10)),[f,g]=b.split(":").map(a=>parseInt(a,10));if(!c||!d||!e||Number.isNaN(f)||Number.isNaN(g))return null;return Date.UTC(c,d-1,e,f+3,g,0,0)}catch{return null}}function z(a,b){let c=y(a,b);return!!c&&Date.now()<c-36e5}async function A(a){if(!v||!w)return!1;let b=function(){let a=(process.env.WHATSAPP_CONFIRMAR_RESERVA_TEMPLATE||process.env.WHATSAPP_TEMPLATE_NAME||"").trim();return a&&"hello_world"!==a?a:"confirmar_reserva"}();for(let c of function(){let a=[(process.env.WHATSAPP_TEMPLATE_LANG||"").trim(),"es_AR","es","es_ES"].filter(Boolean),b=new Set;return a.filter(a=>!b.has(a)&&(b.add(a),!0))}())try{let d=await fetch(`https://graph.facebook.com/v18.0/${w}/messages`,{method:"POST",headers:{Authorization:`Bearer ${v}`,"Content-Type":"application/json"},body:JSON.stringify({messaging_product:"whatsapp",to:a,type:"template",template:{name:b,language:{code:c}}})});if(d.ok)return!0;let e=await d.text();console.error("[enviarTemplateConfirmarReserva] Error",{status:d.status,to:a,templateName:b,lang:c,body:e})}catch(a){console.error("[enviarTemplateConfirmarReserva] Exception",a?.message||a)}return!1}async function B(a,b,c){console.log(`[promoverDeListaEsperaSimple] 🚀 Iniciando promoci\xf3n para clase ${b}, fecha ${c}`);let d=null;try{d=await a.prepare(`
       SELECT * FROM lista_espera
       WHERE clase_id = ? AND fecha_clase = ?
       ORDER BY numero ASC
       LIMIT 1
-    `).bind(b,c).first()}catch(a){console.log("[promoverDeListaEsperaSimple] Error accediendo a lista_espera:",a?.message||a);return}if(!d)return void console.log(`[promoverDeListaEsperaSimple] No hay nadie en lista de espera para clase ${b}, fecha ${c}`);let e=await a.prepare(`
-    SELECT COUNT(DISTINCT r.usuario_id) as count
-    FROM reserva r
-    WHERE r.clase_id = ?
-      AND (r.fecha_clase IS NULL OR r.fecha_clase = 'null' OR r.fecha_clase = '')
-      AND (r.es_reasignacion IS NULL OR r.es_reasignacion = 0)
-      AND NOT EXISTS (
-        SELECT 1 FROM cancelacion c
-        WHERE c.usuario_id = r.usuario_id
-          AND c.clase_id = r.clase_id
-          AND c.fecha_clase = ?
-      )
-  `).bind(b,c).first(),f=Number(e?.count||0),g=await a.prepare(`
-    SELECT COUNT(DISTINCT r.usuario_id) as count
-    FROM reserva r
-    WHERE r.clase_id = ? AND r.fecha_clase = ? AND r.es_reasignacion = 1
-      AND NOT EXISTS (
-        SELECT 1 FROM cancelacion c
-        WHERE c.usuario_id = r.usuario_id
-          AND c.clase_id = r.clase_id
-          AND c.fecha_clase = r.fecha_clase
-      )
-  `).bind(b,c).first(),h=Number(g?.count||0),i=f+h;if(console.log(`[promoverDeListaEsperaSimple] Cupo actual: ${i}/35 (fijas: ${f}, temporales: ${h})`),i>=35)return void console.log("[promoverDeListaEsperaSimple] Cupo completo, no se puede promover");let j=Number(d.usuario_id);console.log(`[promoverDeListaEsperaSimple] Promoviendo usuario ${j} de lista de espera`);let k=await a.prepare(`
-    SELECT * FROM reserva
-    WHERE usuario_id = ? AND clase_id = ? AND fecha_clase = ? AND es_reasignacion = 1
-  `).bind(j,b,c).first();if(await a.prepare("DELETE FROM lista_espera WHERE usuario_id = ? AND clase_id = ? AND fecha_clase = ?").bind(j,b,c).run(),k)console.log(`[promoverDeListaEsperaSimple] ⚠️ Usuario ${j} ya ten\xeda reserva temporal, solo eliminado de lista`);else{await a.prepare(`
-      INSERT INTO reserva (usuario_id, clase_id, fecha_clase, es_reasignacion, created_at)
-      VALUES (?, ?, ?, 1, datetime('now'))
-    `).bind(j,b,c).run(),console.log(`[promoverDeListaEsperaSimple] ✅ Reserva temporal creada para usuario ${j}`);try{let b=await a.prepare(`
+    `).bind(b,c).first(),console.log("[promoverDeListaEsperaSimple] Consulta lista_espera ejecutada. Resultado:",d?`Usuario ${d.usuario_id} encontrado`:"Ninguno")}catch(a){throw console.error(`[promoverDeListaEsperaSimple] ❌ Error accediendo a lista_espera:`,a?.message||a),a}if(!d)return void console.log(`[promoverDeListaEsperaSimple] ℹ️ No hay nadie en lista de espera para clase ${b}, fecha ${c}`);let e=0,f=0;try{let d=await a.prepare(`
+      SELECT COUNT(DISTINCT r.usuario_id) as count
+      FROM reserva r
+      WHERE r.clase_id = ?
+        AND (r.fecha_clase IS NULL OR r.fecha_clase = 'null' OR r.fecha_clase = '')
+        AND (r.es_reasignacion IS NULL OR r.es_reasignacion = 0)
+        AND NOT EXISTS (
+          SELECT 1 FROM cancelacion c
+          WHERE c.usuario_id = r.usuario_id
+            AND c.clase_id = r.clase_id
+            AND c.fecha_clase = ?
+        )
+    `).bind(b,c).first();e=Number(d?.count||0),console.log(`[promoverDeListaEsperaSimple] Reservas fijas (sin cancelaciones): ${e}`)}catch(a){throw console.error(`[promoverDeListaEsperaSimple] ❌ Error contando reservas fijas:`,a?.message||a),a}try{let d=await a.prepare(`
+      SELECT COUNT(DISTINCT r.usuario_id) as count
+      FROM reserva r
+      WHERE r.clase_id = ? AND r.fecha_clase = ? AND r.es_reasignacion = 1
+        AND NOT EXISTS (
+          SELECT 1 FROM cancelacion c
+          WHERE c.usuario_id = r.usuario_id
+            AND c.clase_id = r.clase_id
+            AND c.fecha_clase = r.fecha_clase
+        )
+    `).bind(b,c).first();f=Number(d?.count||0),console.log(`[promoverDeListaEsperaSimple] Reservas temporales (sin cancelaciones): ${f}`)}catch(a){throw console.error(`[promoverDeListaEsperaSimple] ❌ Error contando reservas temporales:`,a?.message||a),a}let g=e+f;if(console.log(`[promoverDeListaEsperaSimple] 📊 Cupo actual: ${g}/35 (fijas: ${e}, temporales: ${f})`),g>=35)return void console.log(`[promoverDeListaEsperaSimple] ⚠️ Cupo completo (${g}/35), no se puede promover`);console.log(`[promoverDeListaEsperaSimple] ✅ Hay cupo disponible (${g}/35), procediendo con promoci\xf3n...`);let h=Number(d.usuario_id);console.log(`[promoverDeListaEsperaSimple] 👤 Promoviendo usuario ${h} de lista de espera`);let i=null;try{i=await a.prepare(`
+      SELECT * FROM reserva
+      WHERE usuario_id = ? AND clase_id = ? AND fecha_clase = ? AND es_reasignacion = 1
+    `).bind(h,b,c).first(),console.log(`[promoverDeListaEsperaSimple] Verificaci\xf3n de duplicado: ${i?"Ya existe reserva temporal":"No existe, se crear\xe1 nueva"}`)}catch(a){throw console.error(`[promoverDeListaEsperaSimple] ❌ Error verificando duplicado:`,a?.message||a),a}try{await a.prepare("DELETE FROM lista_espera WHERE usuario_id = ? AND clase_id = ? AND fecha_clase = ?").bind(h,b,c).run(),console.log(`[promoverDeListaEsperaSimple] ✅ Usuario ${h} eliminado de lista de espera`)}catch(a){throw console.error(`[promoverDeListaEsperaSimple] ❌ Error eliminando de lista de espera:`,a?.message||a),a}if(i)console.log(`[promoverDeListaEsperaSimple] ⚠️ Usuario ${h} ya ten\xeda reserva temporal, solo eliminado de lista`);else{try{await a.prepare(`
+        INSERT INTO reserva (usuario_id, clase_id, fecha_clase, es_reasignacion, created_at)
+        VALUES (?, ?, ?, 1, datetime('now'))
+      `).bind(h,b,c).run(),console.log(`[promoverDeListaEsperaSimple] ✅ Reserva temporal creada para usuario ${h}`)}catch(a){throw console.error(`[promoverDeListaEsperaSimple] ❌ Error creando reserva temporal:`,a?.message||a),a}try{let b=await a.prepare(`
         SELECT id FROM clase_recuperar
         WHERE usuario_id = ? AND usado = 0 AND fecha_vencimiento >= date('now')
         ORDER BY fecha_vencimiento ASC, id ASC
         LIMIT 1
-      `).bind(j).first();b?.id?(await a.prepare(`
+      `).bind(h).first();b?.id?(await a.prepare(`
           UPDATE clase_recuperar
           SET usado = 1, fecha_uso = date('now')
           WHERE id = ?
-        `).bind(b.id).run(),console.log(`[promoverDeListaEsperaSimple] ✅ Clase para recuperar consumida para usuario ${j}`,{clase_recuperar_id:b.id})):console.log(`[promoverDeListaEsperaSimple] ℹ️ Usuario ${j} no tiene clases para recuperar disponibles`)}catch(a){a?.message?.includes("no such table")||console.warn("[promoverDeListaEsperaSimple] Error consumiendo clase para recuperar (no cr\xedtico):",a.message||a)}}let l=(await a.prepare(`
+        `).bind(b.id).run(),console.log(`[promoverDeListaEsperaSimple] ✅ Clase para recuperar consumida para usuario ${h}`,{clase_recuperar_id:b.id})):console.log(`[promoverDeListaEsperaSimple] ℹ️ Usuario ${h} no tiene clases para recuperar disponibles`)}catch(a){a?.message?.includes("no such table")||console.warn("[promoverDeListaEsperaSimple] Error consumiendo clase para recuperar (no cr\xedtico):",a.message||a)}}let j=(await a.prepare(`
     SELECT * FROM lista_espera
     WHERE clase_id = ? AND fecha_clase = ?
     ORDER BY numero ASC
-  `).bind(b,c).all().catch(()=>({results:[]}))).results||[];for(let d=0;d<l.length;d++)await a.prepare(`
+  `).bind(b,c).all().catch(()=>({results:[]}))).results||[];for(let d=0;d<j.length;d++)await a.prepare(`
       UPDATE lista_espera SET numero = ?
       WHERE usuario_id = ? AND clase_id = ? AND fecha_clase = ?
-    `).bind(d+1,l[d].usuario_id,b,c).run();let m=await a.prepare("SELECT telefono FROM usuario WHERE id = ?").bind(j).first(),n=function(a){let b=C(a);if(!b)return"";let c=b;return c.startsWith("0")&&(c=c.slice(1)),c.startsWith("54")&&!c.startsWith("549")&&(c="549"+c.slice(2)),c.startsWith("54")||10!==c.length&&11!==c.length||(c="549"+c),c}(m?.telefono?String(m.telefono):"");if(n){let a=await A(n);console.log(`[promoverDeListaEsperaSimple] ${a?"✅":"❌"} Template de confirmaci\xf3n ${a?"enviado":"fall\xf3"} a usuario ${j}`)}else console.log(`[promoverDeListaEsperaSimple] ⚠️ No se pudo enviar template: tel\xe9fono vac\xedo para usuario ${j}`);console.log(`[promoverDeListaEsperaSimple] ✅ Promoci\xf3n completada para usuario ${j}`)}function C(a){return a.replace(/\D/g,"")}function D(a,b=8){let c=C(a);return c.length<b?c:c.slice(-b)}async function E(a,b){try{let c=D(b,8);console.log("[getUsuarioPorTelefono] Buscando usuario con \xfaltimos 8 d\xedgitos:",c,"del tel\xe9fono:",b);let d=await a.prepare("SELECT * FROM usuario WHERE activo = 1").all();for(let a of d?.results||[])if(a.telefono&&D(a.telefono,8)===c)return console.log("[getUsuarioPorTelefono] Usuario encontrado:",a.id,a.nombre,a.apellido),a;return console.log("[getUsuarioPorTelefono] No se encontr\xf3 usuario con \xfaltimos 8 d\xedgitos:",c),null}catch(a){return console.error("[getUsuarioPorTelefono] Error:",a),null}}async function F(a,b){try{let c=await a.prepare(`
+    `).bind(d+1,j[d].usuario_id,b,c).run();try{let b=await a.prepare("SELECT telefono FROM usuario WHERE id = ?").bind(h).first(),c=b?.telefono?String(b.telefono):"",d=function(a){let b=C(a);if(!b)return"";let c=b;return c.startsWith("0")&&(c=c.slice(1)),c.startsWith("54")&&!c.startsWith("549")&&(c="549"+c.slice(2)),c.startsWith("54")||10!==c.length&&11!==c.length||(c="549"+c),c}(c);if(d){let a=await A(d);console.log(`[promoverDeListaEsperaSimple] ${a?"✅":"❌"} Template de confirmaci\xf3n ${a?"enviado":"fall\xf3"} a usuario ${h} (tel: ${d})`)}else console.log(`[promoverDeListaEsperaSimple] ⚠️ No se pudo enviar template: tel\xe9fono vac\xedo para usuario ${h}`)}catch(a){console.warn(`[promoverDeListaEsperaSimple] ⚠️ Error enviando template (no cr\xedtico):`,a?.message||a)}console.log(`[promoverDeListaEsperaSimple] ✅✅✅ Promoci\xf3n COMPLETADA exitosamente para usuario ${h}`)}function C(a){return a.replace(/\D/g,"")}function D(a,b=8){let c=C(a);return c.length<b?c:c.slice(-b)}async function E(a,b){try{let c=D(b,8);console.log("[getUsuarioPorTelefono] Buscando usuario con \xfaltimos 8 d\xedgitos:",c,"del tel\xe9fono:",b);let d=await a.prepare("SELECT * FROM usuario WHERE activo = 1").all();for(let a of d?.results||[])if(a.telefono&&D(a.telefono,8)===c)return console.log("[getUsuarioPorTelefono] Usuario encontrado:",a.id,a.nombre,a.apellido),a;return console.log("[getUsuarioPorTelefono] No se encontr\xf3 usuario con \xfaltimos 8 d\xedgitos:",c),null}catch(a){return console.error("[getUsuarioPorTelefono] Error:",a),null}}async function F(a,b){try{let c=await a.prepare(`
       SELECT r.*, c.dia, c.hora, c.nombre
       FROM reserva r
       JOIN clase c ON r.clase_id = c.id
@@ -112,13 +112,13 @@ Selecciona una clase:`;await K(w,v,c,k,"Ver clases",[{title:"Clases",rows:j}])}a
     `).bind(b,c,d).first();if(!e&&!f)return console.log("[procesarCancelacion] No se encontr\xf3 reserva fija ni temporal"),{success:!1,message:"No se encontr\xf3 la reserva"};let g=!!f;if(!g&&await a.prepare(`
         SELECT * FROM cancelacion
         WHERE usuario_id = ? AND clase_id = ? AND fecha_clase = ?
-      `).bind(b,c,d).first())return{success:!1,message:"Ya existe una cancelaci\xf3n para esta clase"};let h=await a.prepare("SELECT * FROM clase WHERE id = ?").bind(c).first();if(!h)return{success:!1,message:"No se encontr\xf3 la clase"};let i=h?.hora?String(h.hora):"";if(!z(d,i))return{success:!1,message:"Solo pod\xe9s cancelar hasta 1 hora antes del inicio de la clase."};g?await a.prepare(`
+      `).bind(b,c,d).first())return{success:!1,message:"Ya existe una cancelaci\xf3n para esta clase"};let h=await a.prepare("SELECT * FROM clase WHERE id = ?").bind(c).first();if(!h)return{success:!1,message:"No se encontr\xf3 la clase"};let i=h?.hora?String(h.hora):"";if(!z(d,i))return{success:!1,message:"Solo pod\xe9s cancelar hasta 1 hora antes del inicio de la clase."};if(g){await a.prepare(`
         DELETE FROM reserva
         WHERE usuario_id = ? AND clase_id = ? AND fecha_clase = ? AND es_reasignacion = 1
-      `).bind(b,c,d).run():await a.prepare(`
+      `).bind(b,c,d).run(),console.log("[procesarCancelacion] ✅ Reserva temporal eliminada:",{usuarioId:b,claseId:c,fechaClase:d});try{console.log("[procesarCancelacion] Intentando promover de lista de espera (temporal)..."),await B(a,c,d),console.log("[procesarCancelacion] ✅ Promoci\xf3n de lista de espera completada (o no hab\xeda nadie)")}catch(a){console.error("[procesarCancelacion] ❌ ERROR al promover de lista de espera:",a?.message||a)}}else{await a.prepare(`
         INSERT INTO cancelacion (usuario_id, clase_id, fecha_clase, created_at)
         VALUES (?, ?, ?, datetime('now'))
-      `).bind(b,c,d).run(),await B(a,c,d);let j=new Date().toISOString().split("T")[0],k=new Date;k.setDate(k.getDate()+30);let l=k.toISOString().split("T")[0];try{await a.prepare(`
+      `).bind(b,c,d).run(),console.log("[procesarCancelacion] ✅ Cancelaci\xf3n de reserva fija creada:",{usuarioId:b,claseId:c,fechaClase:d});try{console.log("[procesarCancelacion] Intentando promover de lista de espera..."),await B(a,c,d),console.log("[procesarCancelacion] ✅ Promoci\xf3n de lista de espera completada (o no hab\xeda nadie)")}catch(a){console.error("[procesarCancelacion] ❌ ERROR al promover de lista de espera:",a?.message||a)}}let j=new Date().toISOString().split("T")[0],k=new Date;k.setDate(k.getDate()+30);let l=k.toISOString().split("T")[0];try{await a.prepare(`
         INSERT INTO clase_recuperar (usuario_id, fecha_creacion, fecha_vencimiento, clase_id, fecha_clase_cancelada, usado)
         VALUES (?, ?, ?, ?, ?, 0)
       `).bind(b,j,l,c,d).run()}catch(e){if(e.message?.includes("no such table"))await a.prepare(`
