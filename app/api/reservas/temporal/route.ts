@@ -183,6 +183,20 @@ export async function POST(request: NextRequest) {
       }, { status: 400 });
     }
 
+    // No permitir temporales en clase desactivada o en fecha desactivada
+    const claseRow = await db.prepare('SELECT activa FROM clase WHERE id = ?').bind(claseIdNum).first();
+    if (claseRow && (claseRow as any).activa === 0) {
+      return NextResponse.json({ error: 'Esta clase no está disponible (desactivada).', code: 'CLASE_DESACTIVADA' }, { status: 400 });
+    }
+    try {
+      const desact = await db.prepare('SELECT 1 FROM clase_desactivada WHERE clase_id = ? AND fecha_clase = ?').bind(claseIdNum, fecha_clase).first();
+      if (desact) {
+        return NextResponse.json({ error: 'Esta fecha no está disponible para inscribir temporales.', code: 'FECHA_DESACTIVADA' }, { status: 400 });
+      }
+    } catch {
+      // Tabla clase_desactivada puede no existir
+    }
+
     // Obtener cupo máximo (por defecto 35)
     console.log('[POST /api/reservas/temporal] Verificando clase con ID:', claseIdNum, '(original:', clase_id, 'tipo:', typeof clase_id, ')');
     

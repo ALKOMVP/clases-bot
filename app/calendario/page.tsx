@@ -23,6 +23,7 @@ interface Clase {
   dia: string;
   hora: string;
   nombre: string;
+  activa?: number;
 }
 
 interface Usuario {
@@ -76,6 +77,7 @@ export default function CalendarioPage() {
   const [needsAutoFix, setNeedsAutoFix] = useState(false);
   const [isAutoFixing, setIsAutoFixing] = useState(false);
   const [hasCheckedAutoFix, setHasCheckedAutoFix] = useState(false);
+  const [desactivadasPorFecha, setDesactivadasPorFecha] = useState<Array<{ clase_id: number; fecha_clase: string }>>([]);
 
   // Ctrl+D para mostrar botones de debug
   useEffect(() => {
@@ -324,6 +326,20 @@ export default function CalendarioPage() {
     }
   };
 
+  const loadDesactivadasPorFecha = async () => {
+    try {
+      const res = await fetch('/api/clases/desactivar-fecha');
+      if (res.ok) {
+        const data = await res.json();
+        setDesactivadasPorFecha(Array.isArray(data.desactivadas) ? data.desactivadas : []);
+      } else {
+        setDesactivadasPorFecha([]);
+      }
+    } catch {
+      setDesactivadasPorFecha([]);
+    }
+  };
+
   const loadCancelaciones = async () => {
     try {
       console.log('[loadCancelaciones] 🔄 Cargando cancelaciones...');
@@ -367,7 +383,7 @@ export default function CalendarioPage() {
     const initData = async () => {
       setLoading(true);
       try {
-        await Promise.all([loadUsuarios(), loadClases(), loadReservasAll(), loadCancelaciones()]);
+        await Promise.all([loadUsuarios(), loadClases(), loadReservasAll(), loadCancelaciones(), loadDesactivadasPorFecha()]);
       } finally {
         setLoading(false);
       }
@@ -405,6 +421,13 @@ export default function CalendarioPage() {
     });
     return index;
   }, [cancelaciones]);
+
+  // Set de (clase_id, fecha_clase) desactivadas por fecha (para calendario)
+  const desactivadasPorFechaSet = useMemo(() => {
+    const s = new Set<string>();
+    desactivadasPorFecha.forEach(d => s.add(`${d.clase_id}-${d.fecha_clase}`));
+    return s;
+  }, [desactivadasPorFecha]);
 
   // Pre-indexar reservas por clase_id y fecha para acceso rápido
   const reservasIndex = useMemo(() => {
@@ -572,6 +595,43 @@ export default function CalendarioPage() {
     setReservasModal([]);
     setShowModal(false);
     setRefreshCounter(prev => prev + 1);
+  };
+
+  const isFechaDesactivada = (claseId: number, fecha: Date): boolean => {
+    const fechaStr = fecha.toISOString().split('T')[0];
+    return desactivadasPorFechaSet.has(`${claseId}-${fechaStr}`);
+  };
+
+  const handleToggleDesactivarFecha = async () => {
+    if (!selectedClase || processing) return;
+    const fechaStr = selectedClase.fecha.toISOString().split('T')[0];
+    const claseId = selectedClase.clase.id;
+    const actualmenteDesactivada = isFechaDesactivada(claseId, selectedClase.fecha);
+    const accion = actualmenteDesactivada ? 'activar' : 'desactivar';
+    if (!confirm(`¿${accion.charAt(0).toUpperCase() + accion.slice(1)} esta fecha?${!actualmenteDesactivada ? ' No se podrán inscribir temporales ni aparecerá en WhatsApp para esta fecha. Los alumnos ya inscritos se mantienen.' : ''}`)) return;
+
+    setProcessing(true);
+    try {
+      if (actualmenteDesactivada) {
+        await fetchWithErrorHandling(
+          `/api/clases/desactivar-fecha?clase_id=${claseId}&fecha_clase=${encodeURIComponent(fechaStr)}`,
+          { method: 'DELETE' },
+          { route: '/api/clases/desactivar-fecha', operation: 'delete_desactivar_fecha' }
+        );
+      } else {
+        await fetchWithErrorHandling('/api/clases/desactivar-fecha', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ clase_id: claseId, fecha_clase: fechaStr })
+        }, { route: '/api/clases/desactivar-fecha', operation: 'post_desactivar_fecha' });
+      }
+      await loadDesactivadasPorFecha();
+      setRefreshCounter(prev => prev + 1);
+    } catch (error: any) {
+      alert(error.message || 'Error al actualizar');
+    } finally {
+      setProcessing(false);
+    }
   };
 
   const handleClaseClick = async (clase: Clase, fecha: Date) => {
@@ -1452,6 +1512,9 @@ export default function CalendarioPage() {
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                       {item.clases.map((c, cIdx) => {
                         const fechaStr = c.fecha.toISOString().split('T')[0];
+                        const isDesactivadaClase = c.clase.activa === 0;
+                        const isDesactivadaFecha = desactivadasPorFechaSet.has(`${c.clase.id}-${fechaStr}`);
+                        const isDesactivada = isDesactivadaClase || isDesactivadaFecha;
                         // Usar las reservas ya calculadas en calendarData (ya filtradas y sin duplicados)
                         const reservasFijas = c.reservas.filter(r => {
                           const esReasignacion = r.es_reasignacion === 1 || r.es_reasignacion === true || Number(r.es_reasignacion) === 1;
@@ -1475,27 +1538,40 @@ export default function CalendarioPage() {
                             key={cIdx}
                             onClick={() => !processing && handleClaseClick(c.clase, c.fecha)}
                             disabled={processing}
-                            className={`hover:bg-purple-50 border-2 ${
-                              tieneTemporales
-                                ? 'bg-green-50/30 border-green-400 hover:border-green-500 relative'
-                                : 'bg-gray-50 border-gray-200 hover:border-purple-300'
+                            className={`hover:bg-purple-50 border-2 relative ${
+                              isDesactivada
+                                ? 'bg-gray-200 border-gray-400 hover:border-gray-500 opacity-90'
+                                : tieneTemporales
+                                  ? 'bg-green-50/30 border-green-400 hover:border-green-500'
+                                  : 'bg-gray-50 border-gray-200 hover:border-purple-300'
                             } p-4 rounded-lg transition-all text-left cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed`}
-                            style={tieneTemporales ? {
+                            style={!isDesactivada && tieneTemporales ? {
                               backgroundColor: 'rgba(240, 253, 244, 0.3)',
                               borderColor: '#4ade80',
                               borderWidth: '2px',
                               borderStyle: 'solid'
-                            } : undefined}
+                            } : isDesactivada ? { borderColor: '#9ca3af', borderWidth: '2px' } : undefined}
                           >
-                            {tieneTemporales && (
+                            {isDesactivada && (
+                              <div className="absolute top-2 right-2 flex items-center gap-1 bg-amber-500 text-white text-xs font-semibold px-2 py-0.5 rounded-full">
+                                Desactivada
+                              </div>
+                            )}
+                            {tieneTemporales && !isDesactivada && (
                               <div className="absolute top-2 right-2 flex items-center gap-1 bg-green-500 text-white text-xs font-semibold px-2 py-0.5 rounded-full">
+                                <span>🔄</span>
+                                <span>{reservasTemporales.length}</span>
+                              </div>
+                            )}
+                            {tieneTemporales && isDesactivada && (
+                              <div className="absolute top-2 right-16 flex items-center gap-1 bg-green-500 text-white text-xs font-semibold px-2 py-0.5 rounded-full">
                                 <span>🔄</span>
                                 <span>{reservasTemporales.length}</span>
                               </div>
                             )}
                             <div className="font-medium text-gray-900 mb-1 flex items-center gap-2">
                               {c.clase.nombre}
-                              {tieneTemporales && (
+                              {tieneTemporales && !isDesactivada && (
                                 <span className="text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded font-medium">
                                   Temporal
                                 </span>
@@ -1555,38 +1631,58 @@ export default function CalendarioPage() {
               onClick={(e) => e.stopPropagation()}
             >
               <div className="p-4 sm:p-6 flex-shrink-0 border-b border-gray-200">
-                <div className="flex justify-between items-center">
+                <div className="flex justify-between items-center flex-wrap gap-2">
                   <div>
                     <h2 className="text-lg sm:text-xl lg:text-2xl font-semibold pr-2">
                       {selectedClase.clase.nombre} - {selectedClase.fecha.toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' })}
                     </h2>
                     <p className="text-sm text-gray-600 mt-1">{selectedClase.clase.hora}</p>
                   </div>
-                  <button
-                    onClick={() => {
-                      if (!processing) handleCloseModal();
-                    }}
-                    disabled={processing}
-                    className="text-gray-500 hover:text-gray-700 text-xl sm:text-2xl flex-shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    ✕
-                  </button>
+                  <div className="flex items-center gap-2">
+                    {selectedClase.clase.activa !== 0 && (
+                      <button
+                        onClick={handleToggleDesactivarFecha}
+                        disabled={processing}
+                        className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                          isFechaDesactivada(selectedClase.clase.id, selectedClase.fecha)
+                            ? 'bg-green-100 text-green-800 hover:bg-green-200'
+                            : 'bg-amber-100 text-amber-800 hover:bg-amber-200'
+                        }`}
+                      >
+                        {isFechaDesactivada(selectedClase.clase.id, selectedClase.fecha) ? 'Activar esta fecha' : 'Desactivar esta fecha'}
+                      </button>
+                    )}
+                    <button
+                      onClick={() => {
+                        if (!processing) handleCloseModal();
+                      }}
+                      disabled={processing}
+                      className="text-gray-500 hover:text-gray-700 text-xl sm:text-2xl flex-shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      ✕
+                    </button>
+                  </div>
                 </div>
               </div>
 
               <div className="overflow-y-auto flex-1 p-4 sm:p-6">
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                   {/* Sección Alumnos Temporales */}
-                  <div className="flex flex-col border border-gray-200 rounded-lg overflow-hidden bg-green-50/30">
+                  <div className={`flex flex-col border border-gray-200 rounded-lg overflow-hidden ${(selectedClase.clase.activa === 0 || isFechaDesactivada(selectedClase.clase.id, selectedClase.fecha)) ? 'bg-gray-100' : 'bg-green-50/30'}`}>
                     <div className="p-3 bg-green-100 border-b border-gray-200 flex-shrink-0">
                       <h3 className="text-sm font-semibold text-gray-700 mb-2">Alumnos Temporales</h3>
+                      {(selectedClase.clase.activa === 0 || isFechaDesactivada(selectedClase.clase.id, selectedClase.fecha)) && (
+                        <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded px-2 py-1.5 mb-2">
+                          Esta fecha está desactivada. No se pueden agregar temporales.
+                        </p>
+                      )}
                       <div className="space-y-2">
                         <input
                           type="text"
                           placeholder="Busca alumnos para agregar como temporal..."
                           value={searchAlumnoTemporal}
                           onChange={(e) => setSearchAlumnoTemporal(e.target.value)}
-                          disabled={processing}
+                          disabled={processing || selectedClase.clase.activa === 0 || isFechaDesactivada(selectedClase.clase.id, selectedClase.fecha)}
                           className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
                         />
                         {searchAlumnoTemporal.trim() && (
@@ -1599,7 +1695,7 @@ export default function CalendarioPage() {
                                   <button
                                     key={usuario.id}
                                     onClick={() => handleAddTemporal(usuario.id)}
-                                    disabled={processing || loading}
+                                    disabled={processing || loading || selectedClase.clase.activa === 0 || isFechaDesactivada(selectedClase.clase.id, selectedClase.fecha)}
                                     className="w-full text-left px-3 py-2 hover:bg-purple-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-between text-sm"
                                   >
                                     <span className="font-medium text-gray-900">

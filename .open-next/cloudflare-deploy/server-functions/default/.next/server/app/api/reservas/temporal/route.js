@@ -8,7 +8,7 @@
             AND r.es_reasignacion = 1
         )
         AND lista_espera.clase_id = ? AND lista_espera.fecha_clase = ?
-      `).bind(i,h).run()}catch(a){a.message&&a.message.includes("no such table")||console.warn("[POST /api/reservas/temporal] Error en limpieza de inconsistencias (no cr\xedtico):",a.message||a)}let k=await c.prepare("SELECT id, activo FROM usuario WHERE id = ?").bind(j).first();if(!k)return u.NextResponse.json({error:"El alumno no existe",code:"USUARIO_NO_EXISTE"},{status:400});if(!k.activo||0===k.activo)return u.NextResponse.json({error:"No se pueden inscribir alumnos desactivados a clases",code:"USUARIO_DESACTIVADO"},{status:400});console.log("[POST /api/reservas/temporal] Verificando clase con ID:",i,"(original:",g,"tipo:",typeof g,")");let l=[];try{l=(await c.prepare("SELECT * FROM clase ORDER BY id").all()).results||[],console.log("[POST /api/reservas/temporal] Todas las clases en BD:",l.length,"clases"),l.forEach(a=>{console.log(`  - ID: ${a.id} (tipo: ${typeof a.id}), D\xeda: ${a.dia}, Hora: ${a.hora}, Nombre: ${a.nombre}`)})}catch(a){console.error("[POST /api/reservas/temporal] Error al obtener todas las clases:",a)}try{let a=await c.prepare("SELECT * FROM clase WHERE id = ?").bind(i).first();a||(console.log("[POST /api/reservas/temporal] No encontrada con n\xfamero, intentando con string..."),a=await c.prepare("SELECT * FROM clase WHERE id = ?").bind(g).first()),b=a,console.log("[POST /api/reservas/temporal] Resultado de b\xfasqueda de clase:",b?`Encontrada: ID ${b.id}, ${b.dia} ${b.hora}`:"NO ENCONTRADA")}catch(a){return console.error("[POST /api/reservas/temporal] Error al buscar clase:",a),u.NextResponse.json({error:`Error al buscar la clase: ${a.message}`,code:"ERROR_BUSCAR_CLASE",debug:{claseIdBuscado:g,claseIdNum:i,clasesDisponibles:l.map(a=>({id:a.id,dia:a.dia,hora:a.hora}))}},{status:500})}if(!b)return u.NextResponse.json({error:`La clase con ID ${g} no existe en la base de datos. Por favor, inicializa las clases desde la secci\xf3n "Clases".`,code:"CLASE_NO_EXISTE",debug:{claseIdBuscado:g,claseIdNum:i,tipoOriginal:typeof g,clasesDisponibles:l.map(a=>({id:a.id,dia:a.dia,hora:a.hora,nombre:a.nombre}))}},{status:400});let m=await c.prepare(`
+      `).bind(i,h).run()}catch(a){a.message&&a.message.includes("no such table")||console.warn("[POST /api/reservas/temporal] Error en limpieza de inconsistencias (no cr\xedtico):",a.message||a)}let k=await c.prepare("SELECT id, activo FROM usuario WHERE id = ?").bind(j).first();if(!k)return u.NextResponse.json({error:"El alumno no existe",code:"USUARIO_NO_EXISTE"},{status:400});if(!k.activo||0===k.activo)return u.NextResponse.json({error:"No se pueden inscribir alumnos desactivados a clases",code:"USUARIO_DESACTIVADO"},{status:400});let l=await c.prepare("SELECT activa FROM clase WHERE id = ?").bind(i).first();if(l&&0===l.activa)return u.NextResponse.json({error:"Esta clase no est\xe1 disponible (desactivada).",code:"CLASE_DESACTIVADA"},{status:400});try{if(await c.prepare("SELECT 1 FROM clase_desactivada WHERE clase_id = ? AND fecha_clase = ?").bind(i,h).first())return u.NextResponse.json({error:"Esta fecha no est\xe1 disponible para inscribir temporales.",code:"FECHA_DESACTIVADA"},{status:400})}catch{}console.log("[POST /api/reservas/temporal] Verificando clase con ID:",i,"(original:",g,"tipo:",typeof g,")");let m=[];try{m=(await c.prepare("SELECT * FROM clase ORDER BY id").all()).results||[],console.log("[POST /api/reservas/temporal] Todas las clases en BD:",m.length,"clases"),m.forEach(a=>{console.log(`  - ID: ${a.id} (tipo: ${typeof a.id}), D\xeda: ${a.dia}, Hora: ${a.hora}, Nombre: ${a.nombre}`)})}catch(a){console.error("[POST /api/reservas/temporal] Error al obtener todas las clases:",a)}try{let a=await c.prepare("SELECT * FROM clase WHERE id = ?").bind(i).first();a||(console.log("[POST /api/reservas/temporal] No encontrada con n\xfamero, intentando con string..."),a=await c.prepare("SELECT * FROM clase WHERE id = ?").bind(g).first()),b=a,console.log("[POST /api/reservas/temporal] Resultado de b\xfasqueda de clase:",b?`Encontrada: ID ${b.id}, ${b.dia} ${b.hora}`:"NO ENCONTRADA")}catch(a){return console.error("[POST /api/reservas/temporal] Error al buscar clase:",a),u.NextResponse.json({error:`Error al buscar la clase: ${a.message}`,code:"ERROR_BUSCAR_CLASE",debug:{claseIdBuscado:g,claseIdNum:i,clasesDisponibles:m.map(a=>({id:a.id,dia:a.dia,hora:a.hora}))}},{status:500})}if(!b)return u.NextResponse.json({error:`La clase con ID ${g} no existe en la base de datos. Por favor, inicializa las clases desde la secci\xf3n "Clases".`,code:"CLASE_NO_EXISTE",debug:{claseIdBuscado:g,claseIdNum:i,tipoOriginal:typeof g,clasesDisponibles:m.map(a=>({id:a.id,dia:a.dia,hora:a.hora,nombre:a.nombre}))}},{status:400});let n=await c.prepare(`
       SELECT COUNT(DISTINCT r.usuario_id) as count
       FROM reserva r
       WHERE r.clase_id = ? 
@@ -20,7 +20,7 @@
             AND c.clase_id = r.clase_id 
             AND c.fecha_clase = ?
         )
-    `).bind(i,h).first(),n=m?.count||0,o=await c.prepare(`
+    `).bind(i,h).first(),o=n?.count||0,p=await c.prepare(`
       SELECT COUNT(DISTINCT r.usuario_id) as count
       FROM reserva r
       WHERE r.clase_id = ? 
@@ -32,11 +32,11 @@
             AND c.clase_id = r.clase_id 
             AND c.fecha_clase = r.fecha_clase
         )
-    `).bind(i,h).first(),p=o?.count||0;console.log("[POST /api/reservas/temporal] Conteo de capacidad:",{countFijas:n,countTemporales:p,totalConfirmados:n+p,cupoMaximo:35,hayEspacio:n+p<35});try{let a=await c.prepare(`
+    `).bind(i,h).first(),q=p?.count||0;console.log("[POST /api/reservas/temporal] Conteo de capacidad:",{countFijas:o,countTemporales:q,totalConfirmados:o+q,cupoMaximo:35,hayEspacio:o+q<35});try{let a=await c.prepare(`
         SELECT COUNT(*) as count
         FROM lista_espera
         WHERE clase_id = ? AND fecha_clase = ?
-      `).bind(g,h).first();a?.count}catch(a){console.log("[POST /api/reservas/temporal] Tabla lista_espera no existe, continuando")}let q=await c.prepare(`
+      `).bind(g,h).first();a?.count}catch(a){console.log("[POST /api/reservas/temporal] Tabla lista_espera no existe, continuando")}let r=await c.prepare(`
       SELECT r.* FROM reserva r
       WHERE r.usuario_id = ? AND r.clase_id = ? 
         AND (r.fecha_clase IS NULL OR r.fecha_clase = 'null' OR r.fecha_clase = '' OR r.fecha_clase = ?)
@@ -46,11 +46,11 @@
             AND c.clase_id = r.clase_id
             AND c.fecha_clase = ?
         )
-    `).bind(j,i,h,h).first(),r=await c.prepare(`
+    `).bind(j,i,h,h).first(),s=await c.prepare(`
       SELECT * FROM cancelacion
       WHERE usuario_id = ? AND clase_id = ? AND fecha_clase = ?
         AND (es_temporal = 1 OR es_temporal = true OR COALESCE(es_temporal, 0) = 1)
-    `).bind(j,i,h).first();if(console.log("[POST /api/reservas/temporal] Verificaci\xf3n de reserva existente:",{usuarioIdNum:j,claseIdNum:i,fecha_clase:h,existingReserva:q?{id:q.id,fecha_clase:q.fecha_clase,es_reasignacion:q.es_reasignacion}:null,cancelacionTemporalCheck:r?{usuario_id:r.usuario_id,clase_id:r.clase_id,fecha_clase:r.fecha_clase,es_temporal:r.es_temporal}:null}),q)if(r)console.log("[POST /api/reservas/temporal] ⚠️ Reserva existe pero tiene cancelaci\xf3n temporal - permitiendo re-inscripci\xf3n");else{if(!q.fecha_clase||"null"===q.fecha_clase||""===q.fecha_clase)return u.NextResponse.json({error:"El alumno ya est\xe1 inscrito como alumno fijo en esta clase",code:"YA_ES_FIJO"},{status:400});if(q.fecha_clase===h)return u.NextResponse.json({error:"El alumno ya est\xe1 inscrito como temporal para esta fecha",code:"YA_ES_TEMPORAL"},{status:400})}if(n+p>=35)try{if(await c.prepare(`
+    `).bind(j,i,h).first();if(console.log("[POST /api/reservas/temporal] Verificaci\xf3n de reserva existente:",{usuarioIdNum:j,claseIdNum:i,fecha_clase:h,existingReserva:r?{id:r.id,fecha_clase:r.fecha_clase,es_reasignacion:r.es_reasignacion}:null,cancelacionTemporalCheck:s?{usuario_id:s.usuario_id,clase_id:s.clase_id,fecha_clase:s.fecha_clase,es_temporal:s.es_temporal}:null}),r)if(s)console.log("[POST /api/reservas/temporal] ⚠️ Reserva existe pero tiene cancelaci\xf3n temporal - permitiendo re-inscripci\xf3n");else{if(!r.fecha_clase||"null"===r.fecha_clase||""===r.fecha_clase)return u.NextResponse.json({error:"El alumno ya est\xe1 inscrito como alumno fijo en esta clase",code:"YA_ES_FIJO"},{status:400});if(r.fecha_clase===h)return u.NextResponse.json({error:"El alumno ya est\xe1 inscrito como temporal para esta fecha",code:"YA_ES_TEMPORAL"},{status:400})}if(o+q>=35)try{if(await c.prepare(`
           SELECT * FROM lista_espera
           WHERE usuario_id = ? AND clase_id = ? AND fecha_clase = ?
         `).bind(j,i,h).first())return u.NextResponse.json({success:!0,enListaEspera:!0,mensaje:"El alumno ya est\xe1 en la lista de espera."});{let a=await c.prepare(`
@@ -67,10 +67,10 @@
           DELETE FROM cancelacion
           WHERE usuario_id = ? AND clase_id = ? AND fecha_clase = ?
             AND (es_temporal = 1 OR es_temporal = true OR COALESCE(es_temporal, 0) = 1)
-        `).bind(j,i,h).run(),console.log("[POST /api/reservas/temporal] ✅ Cancelaci\xf3n temporal previa eliminada al re-inscribir usuario",{usuarioIdNum:j,claseIdNum:i,fecha_clase:h}))}catch(a){console.warn("[POST /api/reservas/temporal] Error eliminando cancelaci\xf3n temporal previa (no cr\xedtico):",a.message||a)}let s=await c.prepare(`
+        `).bind(j,i,h).run(),console.log("[POST /api/reservas/temporal] ✅ Cancelaci\xf3n temporal previa eliminada al re-inscribir usuario",{usuarioIdNum:j,claseIdNum:i,fecha_clase:h}))}catch(a){console.warn("[POST /api/reservas/temporal] Error eliminando cancelaci\xf3n temporal previa (no cr\xedtico):",a.message||a)}let t=await c.prepare(`
       INSERT INTO reserva (usuario_id, clase_id, fecha_clase, es_reasignacion, created_at)
       VALUES (?, ?, ?, 1, datetime('now'))
-    `).bind(j,i,h).run();if(console.log("[POST /api/reservas/temporal] ✅ Reserva temporal creada",{usuarioIdNum:j,claseIdNum:i,fecha_clase:h,changes:s?.meta?.changes||0}),await c.prepare(`
+    `).bind(j,i,h).run();if(console.log("[POST /api/reservas/temporal] ✅ Reserva temporal creada",{usuarioIdNum:j,claseIdNum:i,fecha_clase:h,changes:t?.meta?.changes||0}),await c.prepare(`
       SELECT * FROM cancelacion
       WHERE usuario_id = ? AND clase_id = ? AND fecha_clase = ?
         AND (es_temporal = 1 OR es_temporal = true OR COALESCE(es_temporal, 0) = 1)

@@ -10,6 +10,7 @@ interface Clase {
   dia: string;
   hora: string;
   nombre: string;
+  activa?: number;
 }
 
 export default function ClasesPage() {
@@ -115,6 +116,26 @@ export default function ClasesPage() {
       loadClases();
     } catch (error: any) {
       alert(error.message || 'Error al eliminar');
+    }
+  };
+
+  const handleToggleActiva = async (clase: Clase) => {
+    const activa = clase.activa === 0 ? 1 : 0;
+    const accion = activa === 1 ? 'activar' : 'desactivar';
+    if (!confirm(`¿${accion.charAt(0).toUpperCase() + accion.slice(1)} esta clase?${activa === 0 ? ' No se mostrará en calendario ni en WhatsApp hasta que la vuelvas a activar. Los alumnos inscritos se mantienen.' : ''}`)) return;
+
+    try {
+      await fetchWithErrorHandling('/api/clases', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: clase.id, activa })
+      }, {
+        route: '/api/clases',
+        operation: 'patch_clase_activa'
+      });
+      loadClases();
+    } catch (error: any) {
+      alert(error.message || 'Error al actualizar');
     }
   };
 
@@ -382,27 +403,49 @@ export default function ClasesPage() {
                         )}
                       </div>
                     </th>
+                    <th className="px-4 sm:px-6 py-2 text-left text-xs font-medium text-gray-500 uppercase">Estado</th>
                     <th className="px-4 sm:px-6 py-2 text-left text-xs font-medium text-gray-500 uppercase">Acciones</th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {paginatedClases.map((clase) => (
-                    <tr key={clase.id}>
-                      <td className="px-4 sm:px-6 py-2 whitespace-nowrap text-sm font-medium text-gray-900">
-                        {getDiaNombre(clase.dia)}
-                      </td>
-                      <td className="px-4 sm:px-6 py-2 whitespace-nowrap text-sm text-gray-900">{clase.hora}</td>
-                      <td className="px-4 sm:px-6 py-2 whitespace-nowrap text-sm text-gray-900">{clase.nombre}</td>
-                      <td className="px-4 sm:px-6 py-2 whitespace-nowrap text-sm font-medium">
-                        <button
-                          onClick={() => handleDelete(clase.id)}
-                          className="px-3 py-2 sm:px-0 sm:py-0 rounded-md sm:rounded-none bg-red-50 sm:bg-transparent text-red-600 hover:text-red-900 hover:bg-red-100 sm:hover:bg-transparent text-sm font-medium transition-colors"
-                        >
-                          Eliminar
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
+                  {paginatedClases.map((clase) => {
+                    const estaActiva = clase.activa !== 0;
+                    return (
+                      <tr key={clase.id} className={!estaActiva ? 'bg-gray-100' : ''}>
+                        <td className="px-4 sm:px-6 py-2 whitespace-nowrap text-sm font-medium text-gray-900">
+                          {getDiaNombre(clase.dia)}
+                        </td>
+                        <td className="px-4 sm:px-6 py-2 whitespace-nowrap text-sm text-gray-900">{clase.hora}</td>
+                        <td className="px-4 sm:px-6 py-2 whitespace-nowrap text-sm text-gray-900">{clase.nombre}</td>
+                        <td className="px-4 sm:px-6 py-2 whitespace-nowrap text-sm">
+                          {estaActiva ? (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">Activa</span>
+                          ) : (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800">Desactivada</span>
+                          )}
+                        </td>
+                        <td className="px-4 sm:px-6 py-2 whitespace-nowrap text-sm font-medium flex flex-wrap gap-1">
+                          <button
+                            onClick={() => handleToggleActiva(clase)}
+                            className={`px-3 py-2 sm:px-0 sm:py-0 rounded-md sm:rounded-none text-sm font-medium transition-colors ${
+                              estaActiva
+                                ? 'bg-amber-50 sm:bg-transparent text-amber-700 hover:bg-amber-100 sm:hover:bg-amber-50'
+                                : 'bg-green-50 sm:bg-transparent text-green-700 hover:bg-green-100 sm:hover:bg-green-50'
+                            }`}
+                          >
+                            {estaActiva ? 'Desactivar' : 'Activar'}
+                          </button>
+                          <span className="text-gray-300 hidden sm:inline">|</span>
+                          <button
+                            onClick={() => handleDelete(clase.id)}
+                            className="px-3 py-2 sm:px-0 sm:py-0 rounded-md sm:rounded-none bg-red-50 sm:bg-transparent text-red-600 hover:text-red-900 hover:bg-red-100 sm:hover:bg-transparent text-sm font-medium transition-colors"
+                          >
+                            Eliminar
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
               </TableScrollContainer>

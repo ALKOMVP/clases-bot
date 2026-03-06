@@ -11,6 +11,9 @@ Para que la base de datos tenga la misma estructura que en producción, necesita
 5. **0005_add_reserva_temporal_fields.sql** - Agrega campos `fecha_clase` y `es_reasignacion` a la tabla `reserva`
 6. **0006_create_lista_espera.sql** - Crea la tabla `lista_espera`
 7. **0007_create_cancelacion.sql** - Crea la tabla `cancelacion`
+8. **0008_add_numero_to_lista_espera.sql** - Agrega campo `numero` a `lista_espera`
+9. **0009_create_clase_recuperar.sql** - Crea la tabla `clase_recuperar`
+10. **0010_add_clase_activa_and_desactivada.sql** - Agrega columna `activa` a `clase` y tabla `clase_desactivada` (desactivar clases sin borrarlas)
 
 ## Método 1: Script Automático (Recomendado)
 
@@ -90,9 +93,26 @@ SELECT name FROM sqlite_master WHERE type='table' AND name='lista_espera';
 SELECT name FROM sqlite_master WHERE type='table' AND name='cancelacion';
 ```
 
+## Si alguna migración falla con "duplicate column name"
+
+Si tu base local ya tiene las columnas o tablas que una migración intenta crear, esa migración falla. Para seguir:
+
+1. Marcar la migración que falló como aplicada (reemplazá `NOMBRE_ARCHIVO.sql` por el nombre real, ej. `0005_add_reserva_temporal_fields.sql` o `0008_add_numero_to_lista_espera.sql`):
+   ```bash
+   wrangler d1 execute clases-db --local --command "INSERT OR IGNORE INTO d1_migrations (name) VALUES ('NOMBRE_ARCHIVO.sql');"
+   ```
+2. Volver a aplicar migraciones:
+   ```bash
+   wrangler d1 migrations apply clases-db --local
+   ```
+
+Ejemplos de migraciones que suelen fallar si la base ya estaba modificada:
+- **0005**: columnas `fecha_clase` o `es_reasignacion` ya existen en `reserva`
+- **0008**: columna `numero` ya existe en `lista_espera`
+
 ## Nota Importante
 
-Si las columnas `fecha_clase` o `es_reasignacion` ya existen en la tabla `reserva`, la migración 0005 fallará con un error. Esto es normal y puedes ignorarlo.
+Si las columnas `fecha_clase` o `es_reasignacion` ya existen en la tabla `reserva`, la migración 0005 fallará con un error. Usá la sección anterior para marcarla como aplicada y continuar.
 
 Si las tablas `lista_espera` o `cancelacion` ya existen, las migraciones 0006 y 0007 usarán `CREATE TABLE IF NOT EXISTS`, por lo que no causarán errores.
 

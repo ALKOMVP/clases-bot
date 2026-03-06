@@ -1,7 +1,7 @@
 {
   "version": 4,
   "routes": {
-    "/login": {
+    "/calendario": {
       "experimentalBypassFor": [
         {
           "type": "header",
@@ -14,8 +14,8 @@
         }
       ],
       "initialRevalidateSeconds": false,
-      "srcRoute": "/login",
-      "dataRoute": "/login.rsc",
+      "srcRoute": "/calendario",
+      "dataRoute": "/calendario.rsc",
       "allowHeader": [
         "host",
         "x-matched-path",
@@ -49,7 +49,7 @@
         "x-next-revalidate-tag-token"
       ]
     },
-    "/usuarios": {
+    "/login": {
       "experimentalBypassFor": [
         {
           "type": "header",
@@ -62,8 +62,8 @@
         }
       ],
       "initialRevalidateSeconds": false,
-      "srcRoute": "/usuarios",
-      "dataRoute": "/usuarios.rsc",
+      "srcRoute": "/login",
+      "dataRoute": "/login.rsc",
       "allowHeader": [
         "host",
         "x-matched-path",
@@ -121,7 +121,7 @@
         "x-next-revalidate-tag-token"
       ]
     },
-    "/calendario": {
+    "/usuarios": {
       "experimentalBypassFor": [
         {
           "type": "header",
@@ -134,8 +134,8 @@
         }
       ],
       "initialRevalidateSeconds": false,
-      "srcRoute": "/calendario",
-      "dataRoute": "/calendario.rsc",
+      "srcRoute": "/usuarios",
+      "dataRoute": "/usuarios.rsc",
       "allowHeader": [
         "host",
         "x-matched-path",
@@ -197,8 +197,8 @@
   "dynamicRoutes": {},
   "notFoundRoutes": [],
   "preview": {
-    "previewModeId": "fc4984e6f6ba1db87bd2413b5c3262ab",
-    "previewModeSigningKey": "b65f29af1d90b0833ae426d249fb8d6f007f0251c4a534768f1ca4ccbe3e7b62",
-    "previewModeEncryptionKey": "3eedc249288e49aea0aa7e297fe4f8e76c7cf70fe85de2017ace8cf923c33f1c"
+    "previewModeId": "a8c4492640ca06683bb865b8469c8cdf",
+    "previewModeSigningKey": "df434c92283cb34f8654f272c41d5113d81bc8a724ed6cc4b65b374951fed572",
+    "previewModeEncryptionKey": "1c638c8126569cc6a674788d907b00eaee3a168c56d7cd52e5a6c57c38014949"
   }
 }

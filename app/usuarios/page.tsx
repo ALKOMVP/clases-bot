@@ -321,8 +321,8 @@ function UsuariosPageContent() {
             }
             return;
           }
-          
-          loadReservas();
+
+          await loadReservas();
         } catch (error: any) {
           // Solo mostrar error en consola si es un error inesperado
           console.error('Error inesperado al inscribir:', error);

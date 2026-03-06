@@ -63,24 +63,26 @@ export async function GET(request: NextRequest) {
       resultKeys: result ? Object.keys(result) : []
     });
     let clases = (result?.results || []) as any[];
+    // Asegurar activa para compatibilidad (si la migración no se aplicó aún, default 1)
+    clases = clases.map((c: any) => ({ ...c, activa: c.activa === 0 ? 0 : 1 }));
     
     // Si no hay clases, inicializarlas automáticamente
     if (clases.length === 0) {
       console.log('[GET /api/clases] No hay clases, inicializando automáticamente...');
       try {
-        // Insertar todas las clases fijas
-        for (const clase of CLASES_FIJAS) {
-          try {
-            await db.prepare(
-              'INSERT INTO clase (dia, hora, nombre) VALUES (?, ?, ?)'
-            ).bind(clase.dia, clase.hora, clase.nombre).run();
-          } catch (error: any) {
-            // Ignorar errores de duplicados (por si acaso)
-            if (!error.message?.includes('UNIQUE constraint')) {
-              console.error('[GET /api/clases] Error al inicializar clase:', error);
-            }
-          }
+    // Insertar todas las clases fijas (activa = 1 por defecto si la columna existe)
+    for (const clase of CLASES_FIJAS) {
+      try {
+        await db.prepare(
+          'INSERT INTO clase (dia, hora, nombre) VALUES (?, ?, ?)'
+        ).bind(clase.dia, clase.hora, clase.nombre).run();
+      } catch (error: any) {
+        // Ignorar errores de duplicados (por si acaso)
+        if (!error.message?.includes('UNIQUE constraint')) {
+          console.error('[GET /api/clases] Error al inicializar clase:', error);
         }
+      }
+    }
         // Volver a obtener las clases después de inicializarlas
         const newResult = await db.prepare('SELECT * FROM clase ORDER BY dia, hora').all();
         clases = (newResult?.results || []) as any[];
@@ -240,6 +242,72 @@ export async function DELETE(request: NextRequest) {
       error,
       'Error al eliminar clase',
       { route: '/api/clases', method: 'DELETE', operation: 'delete_clase' }
+    );
+  }
+}
+
+export async function PATCH(request: NextRequest) {
+  const envInfo = getEnvironmentInfo();
+  console.log('[PATCH /api/clases] Starting request', { environment: envInfo.environment });
+
+  try {
+    let db: any = null;
+    const cloudflareContext = (globalThis as any)[Symbol.for('__cloudflare-context__')];
+    if (cloudflareContext?.env?.DB) db = cloudflareContext.env.DB;
+    if (!db && typeof process !== 'undefined' && (process.env as any).DB) db = (process.env as any).DB;
+    if (!db) db = getMockDBInstance();
+    if (!db) {
+      return NextResponse.json({ error: 'Base de datos no disponible' }, { status: 503 });
+    }
+
+    const body = await request.json();
+    const id = body.id != null ? String(body.id) : null;
+    const activa = body.activa;
+
+    if (!id) {
+      return NextResponse.json({ error: 'ID de clase requerido' }, { status: 400 });
+    }
+    if (activa !== 0 && activa !== 1) {
+      return NextResponse.json({ error: 'activa debe ser 0 o 1' }, { status: 400 });
+    }
+
+    // Si la tabla no tiene columna activa, intentar agregarla (migración 0010) y reintentar
+    try {
+      await db.prepare('UPDATE clase SET activa = ? WHERE id = ?').bind(activa, id).run();
+    } catch (e: any) {
+      if (e?.message?.includes('no such column') || e?.message?.includes('activa')) {
+        try {
+          await db.prepare('ALTER TABLE clase ADD COLUMN activa INTEGER NOT NULL DEFAULT 1').run();
+          await db.prepare(
+            `CREATE TABLE IF NOT EXISTS clase_desactivada (
+              clase_id INTEGER NOT NULL,
+              fecha_clase TEXT NOT NULL,
+              PRIMARY KEY (clase_id, fecha_clase),
+              FOREIGN KEY (clase_id) REFERENCES clase(id)
+            )`
+          ).run();
+          await db.prepare('UPDATE clase SET activa = ? WHERE id = ?').bind(activa, id).run();
+          console.log('[PATCH /api/clases] Migración 0010 aplicada (activa + clase_desactivada) y actualización aplicada', { id, activa });
+          return NextResponse.json({ success: true, activa });
+        } catch (alterErr: any) {
+          if (alterErr?.message?.includes('duplicate column')) {
+            return NextResponse.json({
+              error: 'La base de datos no tiene la columna activa. Ejecutá la migración 0010: local: wrangler d1 migrations apply clases-db --local | remoto: wrangler d1 migrations apply clases-db --remote'
+            }, { status: 400 });
+          }
+          throw alterErr;
+        }
+      }
+      throw e;
+    }
+
+    console.log('[PATCH /api/clases] Success', { id, activa });
+    return NextResponse.json({ success: true, activa });
+  } catch (error: any) {
+    return createErrorResponse(
+      error,
+      'Error al actualizar clase',
+      { route: '/api/clases', method: 'PATCH', operation: 'patch_clase' }
     );
   }
 }

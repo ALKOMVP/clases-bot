@@ -47,7 +47,8 @@ function getMockData() {
         reservas: [],
         cancelaciones: [],
         lista_espera: [],
-        clase_recuperar: []
+        clase_recuperar: [],
+        clase_desactivada: []
       };
     }
     mockData = (globalThis as any).__mockDBData;
@@ -59,7 +60,8 @@ function getMockData() {
         reservas: [],
         cancelaciones: [],
         lista_espera: [],
-        clase_recuperar: []
+        clase_recuperar: [],
+        clase_desactivada: []
       };
     }
     mockData = (global as any).__mockDBData;
@@ -174,7 +176,26 @@ class MockDB {
                 const claseId = params && params.length > 0 ? Number(params[0]) : null;
                 if (claseId !== null) {
                   const clase = mockData.clases.find((c: any) => Number(c.id) === claseId);
-                  return clase || null;
+                  return clase ? { ...clase, activa: clase.activa ?? 1 } : null;
+                }
+                return null;
+              }
+              if (query.includes('FROM clase_desactivada') && query.includes('WHERE clase_id') && query.includes('fecha_clase')) {
+                const claseId = params && params.length > 0 ? Number(params[0]) : null;
+                const fechaClase = params && params.length > 1 ? String(params[1]) : null;
+                if (claseId != null && fechaClase != null) {
+                  const row = mockData.clase_desactivada.find(
+                    (d: any) => Number(d.clase_id) === claseId && d.fecha_clase === fechaClase
+                  );
+                  return row ? { 1: 1 } : null;
+                }
+                return null;
+              }
+              if (query.includes('SELECT activa FROM clase WHERE id')) {
+                const claseId = params && params.length > 0 ? Number(params[0]) : null;
+                if (claseId !== null) {
+                  const clase = mockData.clases.find((c: any) => Number(c.id) === claseId);
+                  return clase ? { activa: clase.activa ?? 1 } : null;
                 }
                 return null;
               }
@@ -243,8 +264,8 @@ class MockDB {
               return { results };
             }
             // Clases
-            if (query.includes('FROM clase')) {
-              let results = [...mockData.clases];
+            if (query.includes('FROM clase') && !query.includes('clase_desactivada')) {
+              let results = [...mockData.clases].map((c: any) => ({ ...c, activa: c.activa ?? 1 }));
               
               // Aplicar ORDER BY si existe
               if (query.includes('ORDER BY dia, hora')) {
@@ -257,6 +278,28 @@ class MockDB {
                 });
               }
               
+              return { results };
+            }
+            if (query.includes('FROM clase_desactivada')) {
+              let results = [...(mockData.clase_desactivada || [])];
+              if (query.includes('WHERE clase_id = ?') && params && params.length >= 1) {
+                results = results.filter((d: any) => Number(d.clase_id) === Number(params[0]));
+              }
+              if (query.includes('fecha_clase = ?') && params && params.length >= 2) {
+                const idx = query.indexOf('fecha_clase = ?');
+                const paramIndex = (query.substring(0, idx).match(/\?/g) || []).length;
+                if (paramIndex < params.length) {
+                  const fecha = String(params[paramIndex]);
+                  results = results.filter((d: any) => d.fecha_clase === fecha);
+                }
+              }
+              if (query.includes('ORDER BY')) {
+                results.sort((a: any, b: any) => {
+                  const d = (a.fecha_clase || '').localeCompare(b.fecha_clase || '');
+                  if (d !== 0) return d;
+                  return Number(a.clase_id) - Number(b.clase_id);
+                });
+              }
               return { results };
             }
         // Reservas
@@ -508,7 +551,8 @@ class MockDB {
                 id: maxId + 1,
                 dia: params[0],
                 hora: params[1],
-                nombre: params[2] || 'Yoga'
+                nombre: params[2] || 'Yoga',
+                activa: 1
               };
               // Verificar si ya existe (dia + hora único)
               const exists = mockData.clases.findIndex(
@@ -555,6 +599,17 @@ class MockDB {
                   changes: 1
                 }
               };
+            }
+            if (query.includes('INSERT INTO clase_desactivada')) {
+              const claseId = Number(params[0]);
+              const fechaClase = String(params[1] || '');
+              const exists = (mockData.clase_desactivada || []).some(
+                (d: any) => Number(d.clase_id) === claseId && d.fecha_clase === fechaClase
+              );
+              if (exists) throw new Error('UNIQUE constraint failed');
+              if (!mockData.clase_desactivada) mockData.clase_desactivada = [];
+              mockData.clase_desactivada.push({ clase_id: claseId, fecha_clase: fechaClase });
+              return { success: true, meta: { changes: 1 } };
             }
             if (query.includes('INSERT INTO reserva')) {
               // Detectar qué campos vienen en el INSERT
@@ -736,8 +791,15 @@ class MockDB {
                 }
               };
             }
-            if (query.includes('UPDATE clase')) {
-              // Similar para clases
+            if (query.includes('UPDATE clase') && query.includes('activa')) {
+              const id = params[params.length - 1];
+              const activa = params[0];
+              const c = mockData.clases.find((x: any) => Number(x.id) === Number(id));
+              if (c) {
+                c.activa = activa;
+                return { success: true, meta: { changes: 1 } };
+              }
+              return { success: true, meta: { changes: 0 } };
             }
             if (query.includes('UPDATE reserva')) {
               // Similar para reservas
@@ -755,6 +817,16 @@ class MockDB {
             }
             if (query.includes('DELETE FROM clase')) {
               mockData.clases = mockData.clases.filter((c: any) => c.id !== parseInt(params[0]));
+            }
+            if (query.includes('DELETE FROM clase_desactivada')) {
+              const claseId = Number(params[0]);
+              const fechaClase = String(params[1] || '');
+              const before = (mockData.clase_desactivada || []).length;
+              mockData.clase_desactivada = (mockData.clase_desactivada || []).filter(
+                (d: any) => !(Number(d.clase_id) === claseId && d.fecha_clase === fechaClase)
+              );
+              const changes = before - (mockData.clase_desactivada || []).length;
+              return { success: true, meta: { changes } };
             }
             if (query.includes('DELETE FROM reserva')) {
               const beforeCount = mockData.reservas.length;

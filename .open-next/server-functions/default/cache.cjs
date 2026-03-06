@@ -1,4 +1,4 @@
-globalThis.disableIncrementalCache = false;globalThis.disableDynamoDBCache = false;globalThis.isNextAfter15 = true;globalThis.openNextDebug = false;globalThis.openNextVersion = "3.9.7";
+globalThis.disableIncrementalCache = false;globalThis.disableDynamoDBCache = false;globalThis.isNextAfter15 = true;globalThis.openNextDebug = false;globalThis.openNextVersion = "3.9.16";
 var __defProp = Object.defineProperty;
 var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
 var __getOwnPropNames = Object.getOwnPropertyNames;
@@ -388,16 +388,24 @@ var Cache = class {
             break;
           }
           case "APP_PAGE": {
-            const { html, rscData, headers, status } = data;
+            const { html, rscData, headers, status, segmentData, postponed } = data;
+            const segmentToWrite = {};
+            if (segmentData) {
+              for (const [segmentPath, segmentContent] of segmentData.entries()) {
+                segmentToWrite[segmentPath] = segmentContent.toString("utf8");
+              }
+            }
             await globalThis.incrementalCache.set(key, {
               type: "app",
               html,
               rsc: rscData.toString("utf8"),
               meta: {
                 status,
-                headers
+                headers,
+                postponed
               },
-              revalidate
+              revalidate,
+              segmentData: segmentData ? segmentToWrite : void 0
             }, "cache");
             break;
           }

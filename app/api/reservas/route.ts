@@ -890,10 +890,44 @@ export async function POST(request: NextRequest) {
     ).bind(usuario_id, clase_id).first();
 
     if (existingReserva) {
-      return NextResponse.json({ 
-        error: 'El alumno ya está inscrito en esta clase',
-        code: 'ALREADY_ENROLLED'
-      }, { status: 400 });
+      // Ya existe la reserva pero puede ser temporal (fecha_clase/es_reasignacion): GET solo devuelve fijas,
+      // por eso el front no la ve y sigue mostrando "Inscribir". Normalizamos a reserva fija para que GET la incluya.
+      try {
+        await db.prepare(
+          `UPDATE reserva SET fecha_clase = NULL, es_reasignacion = 0 WHERE usuario_id = ? AND clase_id = ?`
+        ).bind(usuario_id, clase_id).run();
+      } catch (updateErr: any) {
+        if (!updateErr?.message?.includes('no such column')) {
+          console.warn('[POST /api/reservas] Error normalizando reserva a fija:', updateErr?.message || updateErr);
+        }
+      }
+      console.log('[POST /api/reservas] Ya inscrito en esta clase (normalizado a fija)', { usuario_id, clase_id });
+      return NextResponse.json({ success: true });
+    }
+
+    // Obtener el día de la clase a inscribir (para soportar "cambio de clase" mismo día)
+    const claseInfo = await db.prepare('SELECT dia FROM clase WHERE id = ?').bind(clase_id).first();
+    const diaNuevaClase = claseInfo ? (claseInfo as any).dia : null;
+
+    // Si el alumno ya tiene otra clase fija el mismo día, interpretar como cambio de clase:
+    // eliminar la reserva anterior e inscribir en la nueva.
+    if (diaNuevaClase) {
+      const otraReservaMismoDia = await db.prepare(`
+        SELECT r.clase_id FROM reserva r
+        INNER JOIN clase c ON r.clase_id = c.id
+        WHERE r.usuario_id = ? AND c.dia = ? AND r.clase_id != ?
+          AND (r.fecha_clase IS NULL OR r.fecha_clase = '' OR r.fecha_clase = 'null')
+          AND (r.es_reasignacion IS NULL OR r.es_reasignacion = 0)
+        LIMIT 1
+      `).bind(usuario_id, diaNuevaClase, clase_id).first();
+
+      if (otraReservaMismoDia) {
+        const claseIdAnterior = (otraReservaMismoDia as any).clase_id;
+        await db.prepare(
+          'DELETE FROM reserva WHERE usuario_id = ? AND clase_id = ?'
+        ).bind(usuario_id, claseIdAnterior).run();
+        console.log('[POST /api/reservas] Cambio de clase mismo día', { usuario_id, claseIdAnterior, clase_id_nueva: clase_id });
+      }
     }
 
     await db.prepare(

@@ -355,19 +355,49 @@ async function getUsuarioPorTelefono(db: any, telefono: string) {
   }
 }
 
-// Helper para obtener próximas clases de un usuario
+// Helper: set de (clase_id, fecha_clase) desactivadas (tabla clase_desactivada)
+async function getDesactivadasPorFechaSet(db: any): Promise<Set<string>> {
+  const set = new Set<string>();
+  try {
+    const rows = await db.prepare('SELECT clase_id, fecha_clase FROM clase_desactivada').all();
+    const list = (rows?.results || []) as Array<{ clase_id: number; fecha_clase: string }>;
+    list.forEach(r => set.add(`${r.clase_id}-${r.fecha_clase}`));
+  } catch {
+    // Tabla puede no existir si no se aplicó migración 0010
+  }
+  return set;
+}
+
+// Helper para obtener próximas clases de un usuario (excluye clases desactivadas y fechas desactivadas)
 async function getProximasClases(db: any, usuarioId: number) {
   try {
-    // Obtener reservas fijas del usuario
-    const reservas = await db.prepare(`
-      SELECT r.*, c.dia, c.hora, c.nombre
-      FROM reserva r
-      JOIN clase c ON r.clase_id = c.id
-      WHERE r.usuario_id = ? 
-        AND (r.fecha_clase IS NULL OR r.fecha_clase = '' OR r.fecha_clase = 'null')
-        AND (r.es_reasignacion IS NULL OR r.es_reasignacion = 0)
-      ORDER BY c.dia, c.hora
-    `).bind(usuarioId).all();
+    let reservas: any;
+    try {
+      reservas = await db.prepare(`
+        SELECT r.*, c.dia, c.hora, c.nombre
+        FROM reserva r
+        JOIN clase c ON r.clase_id = c.id
+        WHERE r.usuario_id = ? 
+          AND (r.fecha_clase IS NULL OR r.fecha_clase = '' OR r.fecha_clase = 'null')
+          AND (r.es_reasignacion IS NULL OR r.es_reasignacion = 0)
+          AND (c.activa IS NULL OR c.activa = 1)
+        ORDER BY c.dia, c.hora
+      `).bind(usuarioId).all();
+    } catch (e: any) {
+      if (e?.message?.includes('no such column') && e?.message?.includes('activa')) {
+        reservas = await db.prepare(`
+          SELECT r.*, c.dia, c.hora, c.nombre
+          FROM reserva r
+          JOIN clase c ON r.clase_id = c.id
+          WHERE r.usuario_id = ? 
+            AND (r.fecha_clase IS NULL OR r.fecha_clase = '' OR r.fecha_clase = 'null')
+            AND (r.es_reasignacion IS NULL OR r.es_reasignacion = 0)
+          ORDER BY c.dia, c.hora
+        `).bind(usuarioId).all();
+      } else {
+        throw e;
+      }
+    }
     
     const reservasList = (reservas?.results || []) as any[];
     
@@ -440,10 +470,17 @@ async function getProximasClases(db: any, usuarioId: number) {
       }
     }
     
-    // Ordenar por fecha
-    proximasClases.sort((a, b) => a.fecha.getTime() - b.fecha.getTime());
+    // Excluir fechas desactivadas (clase_desactivada)
+    const desactivadasSet = await getDesactivadasPorFechaSet(db);
+    const filtradas = proximasClases.filter(item => {
+      const fechaISO = item.fecha.toISOString().split('T')[0];
+      return !desactivadasSet.has(`${item.reserva.clase_id}-${fechaISO}`);
+    });
     
-    return proximasClases;
+    // Ordenar por fecha
+    filtradas.sort((a, b) => a.fecha.getTime() - b.fecha.getTime());
+    
+    return filtradas;
   } catch (error) {
     console.error('[getProximasClases] Error:', error);
     return [];
@@ -454,23 +491,94 @@ async function getProximasClases(db: any, usuarioId: number) {
 async function getProximasCancelables(db: any, usuarioId: number) {
   const items: Array<{ fecha: Date; clase: any; reserva: any; esTemporal: boolean }> = [];
 
-  // Temporales del usuario (con fecha_clase) EXCLUYENDO las canceladas
-  const temporales = await db.prepare(`
-    SELECT r.*, c.dia, c.hora, c.nombre
-    FROM reserva r
-    JOIN clase c ON r.clase_id = c.id
-    WHERE r.usuario_id = ?
-      AND r.es_reasignacion = 1
-      AND r.fecha_clase IS NOT NULL AND r.fecha_clase != '' AND r.fecha_clase != 'null'
-      AND date(r.fecha_clase) >= date('now')
-      AND NOT EXISTS (
-        SELECT 1 FROM cancelacion c
-        WHERE c.usuario_id = r.usuario_id 
-          AND c.clase_id = r.clase_id 
-          AND c.fecha_clase = r.fecha_clase
-      )
-    ORDER BY r.fecha_clase ASC, c.hora ASC
-  `).bind(usuarioId).all();
+  // Temporales del usuario (con fecha_clase) EXCLUYENDO canceladas y fechas/clases desactivadas
+  let temporales: any;
+  try {
+    temporales = await db.prepare(`
+      SELECT r.*, c.dia, c.hora, c.nombre
+      FROM reserva r
+      JOIN clase c ON r.clase_id = c.id
+      WHERE r.usuario_id = ?
+        AND r.es_reasignacion = 1
+        AND r.fecha_clase IS NOT NULL AND r.fecha_clase != '' AND r.fecha_clase != 'null'
+        AND date(r.fecha_clase) >= date('now')
+        AND (c.activa IS NULL OR c.activa = 1)
+        AND NOT EXISTS (
+          SELECT 1 FROM cancelacion c2
+          WHERE c2.usuario_id = r.usuario_id 
+            AND c2.clase_id = r.clase_id 
+            AND c2.fecha_clase = r.fecha_clase
+        )
+        AND NOT EXISTS (
+          SELECT 1 FROM clase_desactivada d
+          WHERE d.clase_id = r.clase_id AND d.fecha_clase = r.fecha_clase
+        )
+      ORDER BY r.fecha_clase ASC, c.hora ASC
+    `).bind(usuarioId).all();
+  } catch (e: any) {
+    const msg = String(e?.message || '');
+    if (msg.includes('no such column') && msg.includes('activa')) {
+      // Columna activa no existe: query sin activa y sin clase_desactivada
+      temporales = await db.prepare(`
+        SELECT r.*, c.dia, c.hora, c.nombre
+        FROM reserva r
+        JOIN clase c ON r.clase_id = c.id
+        WHERE r.usuario_id = ?
+          AND r.es_reasignacion = 1
+          AND r.fecha_clase IS NOT NULL AND r.fecha_clase != '' AND r.fecha_clase != 'null'
+          AND date(r.fecha_clase) >= date('now')
+          AND NOT EXISTS (
+            SELECT 1 FROM cancelacion c2
+            WHERE c2.usuario_id = r.usuario_id 
+              AND c2.clase_id = r.clase_id 
+              AND c2.fecha_clase = r.fecha_clase
+          )
+        ORDER BY r.fecha_clase ASC, c.hora ASC
+      `).bind(usuarioId).all();
+    } else if (msg.includes('clase_desactivada') || msg.includes('no such table')) {
+      try {
+        temporales = await db.prepare(`
+          SELECT r.*, c.dia, c.hora, c.nombre
+          FROM reserva r
+          JOIN clase c ON r.clase_id = c.id
+          WHERE r.usuario_id = ?
+            AND r.es_reasignacion = 1
+            AND r.fecha_clase IS NOT NULL AND r.fecha_clase != '' AND r.fecha_clase != 'null'
+            AND date(r.fecha_clase) >= date('now')
+            AND (c.activa IS NULL OR c.activa = 1)
+            AND NOT EXISTS (
+              SELECT 1 FROM cancelacion c2
+              WHERE c2.usuario_id = r.usuario_id 
+                AND c2.clase_id = r.clase_id 
+                AND c2.fecha_clase = r.fecha_clase
+            )
+          ORDER BY r.fecha_clase ASC, c.hora ASC
+        `).bind(usuarioId).all();
+      } catch (e2: any) {
+        if (String(e2?.message || '').includes('no such column') && String(e2?.message || '').includes('activa')) {
+          temporales = await db.prepare(`
+            SELECT r.*, c.dia, c.hora, c.nombre
+            FROM reserva r
+            JOIN clase c ON r.clase_id = c.id
+            WHERE r.usuario_id = ?
+              AND r.es_reasignacion = 1
+              AND r.fecha_clase IS NOT NULL AND r.fecha_clase != '' AND r.fecha_clase != 'null'
+              AND NOT EXISTS (
+                SELECT 1 FROM cancelacion c2
+                WHERE c2.usuario_id = r.usuario_id 
+                  AND c2.clase_id = r.clase_id 
+                  AND c2.fecha_clase = r.fecha_clase
+              )
+            ORDER BY r.fecha_clase ASC, c.hora ASC
+          `).bind(usuarioId).all();
+        } else {
+          throw e2;
+        }
+      }
+    } else {
+      throw e;
+    }
+  }
 
   for (const r of ((temporales?.results || []) as any[])) {
     const fechaISO = String(r.fecha_clase || '');
@@ -822,8 +930,16 @@ async function handleVerClases(db: any, usuarioId: number, from: string) {
 
 // Handler para "Reservar clase" (antes "Agendar") -> lista con botón "Ver clases" + modal
 async function handleReservarClase(db: any, usuarioId: number, from: string, offset: number = 0) {
-  // Obtener todas las clases del calendario (clases semanales)
-  const clases = await db.prepare('SELECT * FROM clase ORDER BY dia, hora').all();
+  let clases: any;
+  try {
+    clases = await db.prepare('SELECT * FROM clase WHERE (activa IS NULL OR activa = 1) ORDER BY dia, hora').all();
+  } catch (e: any) {
+    if (e?.message?.includes('no such column') && e?.message?.includes('activa')) {
+      clases = await db.prepare('SELECT * FROM clase ORDER BY dia, hora').all();
+    } else {
+      throw e;
+    }
+  }
   const clasesList = (clases?.results || []) as any[];
 
   if (clasesList.length === 0) {
@@ -832,7 +948,12 @@ async function handleReservarClase(db: any, usuarioId: number, from: string, off
   }
 
   const disponibles = await getClasesRecuperarDisponibles(db, usuarioId);
-  const ocurrencias = generarOcurrenciasDeClases(clasesList, 30);
+  const ocurrenciasRaw = generarOcurrenciasDeClases(clasesList, 30);
+  const desactivadasSet = await getDesactivadasPorFechaSet(db);
+  const ocurrencias = ocurrenciasRaw.filter(o => {
+    const fechaISO = o.fecha.toISOString().split('T')[0];
+    return !desactivadasSet.has(`${o.clase.id}-${fechaISO}`);
+  });
 
   // Paginación: WhatsApp list -> máx 10 filas. Usamos 9 + 1 "Ver más clases".
   const pageSize = 9;
@@ -1187,6 +1308,7 @@ export async function POST(request: NextRequest) {
         const interactive = message.interactive;
         const buttonId = interactive?.button_reply?.id || interactive?.list_reply?.id;
         
+        try {
         if (buttonId === 'ver_clases') {
           await handleVerClases(db, usuario.id, from);
         } else if (buttonId === 'cancelar') {
@@ -1202,6 +1324,27 @@ export async function POST(request: NextRequest) {
           if (partes.length === 3) {
             const claseId = parseInt(partes[1], 10);
             const fechaClase = partes[2];
+
+            // No permitir reservar en clase desactivada o fecha desactivada
+            let claseRow: any = null;
+            try {
+              claseRow = await db.prepare('SELECT activa FROM clase WHERE id = ?').bind(claseId).first();
+            } catch {
+              // Columna activa puede no existir; asumir clase disponible
+            }
+            if (claseRow && claseRow.activa === 0) {
+              await enviarMensajeTexto(PHONE_NUMBER_ID, WHATSAPP_TOKEN, from, '❌ Esa clase no está disponible en este momento.');
+              continue;
+            }
+            try {
+              const desact = await db.prepare('SELECT 1 FROM clase_desactivada WHERE clase_id = ? AND fecha_clase = ?').bind(claseId, fechaClase).first();
+              if (desact) {
+                await enviarMensajeTexto(PHONE_NUMBER_ID, WHATSAPP_TOKEN, from, '❌ Esa fecha no está disponible para reservar.');
+                continue;
+              }
+            } catch {
+              // Tabla clase_desactivada puede no existir
+            }
 
             // Validar que tenga clases a recuperar
             const disponibles = await getClasesRecuperarDisponibles(db, usuario.id);
@@ -1375,6 +1518,10 @@ export async function POST(request: NextRequest) {
               );
             }
           }
+        }
+        } catch (e: any) {
+          console.error('[POST /api/whatsapp/webhook] Error:', e);
+          await enviarMensajeTexto(PHONE_NUMBER_ID, WHATSAPP_TOKEN, from, 'Ocurrió un error. Volvé a intentar en un momento.');
         }
       }
     }
