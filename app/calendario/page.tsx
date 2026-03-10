@@ -1639,6 +1639,7 @@ export default function CalendarioPage() {
                     <p className="text-sm text-gray-600 mt-1">{selectedClase.clase.hora}</p>
                   </div>
                   <div className="flex items-center gap-2">
+                    {/* Botón desactivar fecha oculto hasta que la migración activa/clase_desactivada esté en producción
                     {selectedClase.clase.activa !== 0 && (
                       <button
                         onClick={handleToggleDesactivarFecha}
@@ -1651,7 +1652,7 @@ export default function CalendarioPage() {
                       >
                         {isFechaDesactivada(selectedClase.clase.id, selectedClase.fecha) ? 'Activar esta fecha' : 'Desactivar esta fecha'}
                       </button>
-                    )}
+                    )} */}
                     <button
                       onClick={() => {
                         if (!processing) handleCloseModal();

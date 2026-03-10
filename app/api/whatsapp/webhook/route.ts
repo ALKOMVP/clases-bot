@@ -488,7 +488,8 @@ async function getProximasClases(db: any, usuarioId: number) {
 }
 
 // Próximas opciones cancelables: mezcla reservas fijas (próximas ocurrencias) + temporales (fecha_clase)
-async function getProximasCancelables(db: any, usuarioId: number) {
+// soloCancelables=true: solo las que se pueden cancelar (≥1h antes). false: todas las próximas (para "Ver mis clases").
+async function getProximasCancelables(db: any, usuarioId: number, soloCancelables: boolean = true) {
   const items: Array<{ fecha: Date; clase: any; reserva: any; esTemporal: boolean }> = [];
 
   // Temporales del usuario (con fecha_clase) EXCLUYENDO canceladas y fechas/clases desactivadas
@@ -563,6 +564,7 @@ async function getProximasCancelables(db: any, usuarioId: number) {
             WHERE r.usuario_id = ?
               AND r.es_reasignacion = 1
               AND r.fecha_clase IS NOT NULL AND r.fecha_clase != '' AND r.fecha_clase != 'null'
+              AND date(r.fecha_clase) >= date('now')
               AND NOT EXISTS (
                 SELECT 1 FROM cancelacion c2
                 WHERE c2.usuario_id = r.usuario_id 
@@ -584,8 +586,13 @@ async function getProximasCancelables(db: any, usuarioId: number) {
     const fechaISO = String(r.fecha_clase || '');
     const hora = String(r.hora || '');
     if (!fechaISO || !hora) continue;
-    if (!esCancelable(fechaISO, hora)) continue;
-    items.push({ fecha: new Date(fechaISO), clase: r, reserva: r, esTemporal: true });
+    // Excluir fechas pasadas (por si la query no filtró por timezone)
+    const fechaClase = new Date(fechaISO);
+    const hoy = new Date();
+    hoy.setHours(0, 0, 0, 0);
+    if (fechaClase < hoy) continue;
+    if (soloCancelables && !esCancelable(fechaISO, hora)) continue;
+    items.push({ fecha: fechaClase, clase: r, reserva: r, esTemporal: true });
   }
 
   // Fijas (usa la lógica existente para generar próximas ocurrencias)
@@ -593,7 +600,7 @@ async function getProximasCancelables(db: any, usuarioId: number) {
   for (const it of fijas) {
     const fechaISO = it.fecha.toISOString().split('T')[0];
     const hora = it.clase?.hora || '';
-    if (!esCancelable(fechaISO, hora)) continue;
+    if (soloCancelables && !esCancelable(fechaISO, hora)) continue;
     items.push({ fecha: it.fecha, clase: it.clase, reserva: it.reserva, esTemporal: false });
   }
 
@@ -902,7 +909,8 @@ async function isCupoCompleto(db: any, claseId: number, fechaISO: string): Promi
 
 // Handler para "Ver mis clases"
 async function handleVerClases(db: any, usuarioId: number, from: string) {
-  const proximasClases = await getProximasClases(db, usuarioId);
+  // Misma lógica que cancelar: mezcla temporales + fijas, próximas 3 (sin filtrar por ventana de cancelación)
+  const proximasClases = await getProximasCancelables(db, usuarioId, false);
   
   if (proximasClases.length === 0) {
     await enviarMensajeTexto(
@@ -914,7 +922,7 @@ async function handleVerClases(db: any, usuarioId: number, from: string) {
     return;
   }
   
-  // Formato como en la captura: lista numerada "Lunes 17:30 - 12 de enero"
+  // Formato como en la captura: lista numerada "Lunes 17:30 - 12 de enero" + indicador (temporal)
   let mensaje = '📅 *Tus próximas clases:*\n\n';
 
   const top = proximasClases.slice(0, 3); // Mostrar 3 clases
@@ -922,7 +930,8 @@ async function handleVerClases(db: any, usuarioId: number, from: string) {
     const item = top[i];
     const hora = item.clase?.hora || '';
     const linea = formatearFechaCorta(item.fecha, hora); // "Lunes 17:30 - 12 de enero"
-    mensaje += `${i + 1}. ${linea}\n`;
+    const temporalLabel = item.esTemporal ? ' 📅 temporal' : '';
+    mensaje += `${i + 1}. ${linea}${temporalLabel}\n`;
   }
   
   await enviarMensajeTexto(PHONE_NUMBER_ID, WHATSAPP_TOKEN, from, mensaje);
@@ -1024,14 +1033,15 @@ async function handleCancelar(db: any, usuarioId: number, from: string) {
   for (let i = 0; i < clasesParaCancelar.length; i++) {
     const item = clasesParaCancelar[i];
     const fechaStr = formatearFechaCorta(item.fecha, item.clase.hora);
+    const temporalLabel = item.esTemporal ? ' 📅 temporal' : '';
+    mensaje += `${i + 1}. ${fechaStr}${temporalLabel}\n`;
     const textoBoton = formatearFechaBoton(item.fecha, item.clase.hora);
-    
-    mensaje += `${i + 1}. ${fechaStr}\n`;
+    const tituloBoton = (item.esTemporal ? '📅 ' : '') + textoBoton;
     botones.push({
       // IMPORTANTE: `item.clase` proviene de `SELECT r.* ...`, por lo que `id` es el id de la RESERVA.
       // Para cancelar necesitamos el id de la CLASE (clase_id).
       id: `cancelar_${item.reserva?.clase_id ?? item.clase?.clase_id ?? item.clase?.id}_${item.fecha.toISOString().split('T')[0]}`,
-      title: textoBoton.length > 20 ? textoBoton.substring(0, 20) : textoBoton
+      title: tituloBoton.length > 20 ? tituloBoton.substring(0, 20) : tituloBoton
     });
   }
   
@@ -1258,10 +1268,39 @@ export async function POST(request: NextRequest) {
     // Procesar mensajes
     const messages = value.messages || [];
     
+    // Tabla para idempotencia: cada message_id se procesa solo una vez (Meta reenvía eventos)
+    try {
+      await db.prepare(`
+        CREATE TABLE IF NOT EXISTS webhook_message_processed (
+          message_id TEXT PRIMARY KEY,
+          processed_at TEXT DEFAULT (datetime('now'))
+        )
+      `).run();
+    } catch (e) {
+      // Ignorar si falla (ej. permisos); seguimos sin dedupe
+    }
+    
     for (const message of messages) {
       const from = message.from; // Número de teléfono (sin +)
       const messageType = message.type;
       const messageId = message.id;
+      
+      // Idempotencia: no procesar el mismo mensaje dos veces (reintentos de Meta)
+      try {
+        const insertResult = await db.prepare(
+          'INSERT OR IGNORE INTO webhook_message_processed (message_id) VALUES (?)'
+        ).bind(messageId).run();
+        if ((insertResult?.meta?.changes ?? 0) === 0) {
+          console.log('[POST /api/whatsapp/webhook] Skipping already processed message:', messageId);
+          continue;
+        }
+      } catch (e: any) {
+        if (e?.message?.includes('no such table')) {
+          // Tabla no existe (migración no aplicada); procesar igual
+        } else {
+          throw e;
+        }
+      }
       
       console.log('[POST /api/whatsapp/webhook] Processing message:', { from, messageType, messageId });
       
