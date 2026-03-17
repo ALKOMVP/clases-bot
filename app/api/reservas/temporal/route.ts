@@ -183,9 +183,14 @@ export async function POST(request: NextRequest) {
       }, { status: 400 });
     }
 
-    // No permitir temporales en clase desactivada o en fecha desactivada
-    const claseRow = await db.prepare('SELECT activa FROM clase WHERE id = ?').bind(claseIdNum).first();
-    if (claseRow && (claseRow as any).activa === 0) {
+    // No permitir temporales en clase desactivada o en fecha desactivada (si existen columna/tabla)
+    let claseRow: any = null;
+    try {
+      claseRow = await db.prepare('SELECT activa FROM clase WHERE id = ?').bind(claseIdNum).first();
+    } catch {
+      // Columna activa puede no existir en producción (migración 0010 no aplicada)
+    }
+    if (claseRow && claseRow.activa === 0) {
       return NextResponse.json({ error: 'Esta clase no está disponible (desactivada).', code: 'CLASE_DESACTIVADA' }, { status: 400 });
     }
     try {
