@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getMockDBInstance } from '@/lib/db-mock';
 import { createErrorResponse, getEnvironmentInfo } from '@/lib/error-handler';
+import { SQL_CANCELACION_ANULA_TEMPORAL } from '@/lib/cancelacion-filters';
 
 function getEnvVar(name: string): string {
   const cf = (globalThis as any)[Symbol.for('__cloudflare-context__')];
@@ -285,6 +286,7 @@ export async function POST(request: NextRequest) {
           WHERE c.usuario_id = r.usuario_id 
             AND c.clase_id = r.clase_id 
             AND c.fecha_clase = r.fecha_clase
+            AND ${SQL_CANCELACION_ANULA_TEMPORAL}
         )
     `).bind(claseIdNum, fecha_clase).first();
     

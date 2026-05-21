@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getMockDBInstance } from '@/lib/db-mock';
 import { createErrorResponse, checkDatabaseAvailability, getEnvironmentInfo } from '@/lib/error-handler';
+import { SQL_CANCELACION_ANULA_TEMPORAL, SQL_CANCELACION_ANULA_TEMPORAL_C2 } from '@/lib/cancelacion-filters';
 
 // OpenNext no requiere runtime = 'edge' explícito
 
@@ -155,6 +156,7 @@ async function promoverDeListaEsperaSimple(db: any, claseId: number, fechaISO: s
           WHERE c.usuario_id = r.usuario_id
             AND c.clase_id = r.clase_id
             AND c.fecha_clase = r.fecha_clase
+            AND ${SQL_CANCELACION_ANULA_TEMPORAL}
         )
     `).bind(claseId, fechaISO).first();
     countTemporales = Number((reservasTemporalesQuery as any)?.count || 0);
@@ -509,6 +511,7 @@ async function getProximasCancelables(db: any, usuarioId: number, soloCancelable
           WHERE c2.usuario_id = r.usuario_id 
             AND c2.clase_id = r.clase_id 
             AND c2.fecha_clase = r.fecha_clase
+            AND ${SQL_CANCELACION_ANULA_TEMPORAL_C2}
         )
         AND NOT EXISTS (
           SELECT 1 FROM clase_desactivada d
@@ -533,6 +536,7 @@ async function getProximasCancelables(db: any, usuarioId: number, soloCancelable
             WHERE c2.usuario_id = r.usuario_id 
               AND c2.clase_id = r.clase_id 
               AND c2.fecha_clase = r.fecha_clase
+              AND ${SQL_CANCELACION_ANULA_TEMPORAL_C2}
           )
         ORDER BY r.fecha_clase ASC, c.hora ASC
       `).bind(usuarioId).all();
@@ -552,6 +556,7 @@ async function getProximasCancelables(db: any, usuarioId: number, soloCancelable
               WHERE c2.usuario_id = r.usuario_id 
                 AND c2.clase_id = r.clase_id 
                 AND c2.fecha_clase = r.fecha_clase
+                AND ${SQL_CANCELACION_ANULA_TEMPORAL_C2}
             )
           ORDER BY r.fecha_clase ASC, c.hora ASC
         `).bind(usuarioId).all();
@@ -570,6 +575,7 @@ async function getProximasCancelables(db: any, usuarioId: number, soloCancelable
                 WHERE c2.usuario_id = r.usuario_id 
                   AND c2.clase_id = r.clase_id 
                   AND c2.fecha_clase = r.fecha_clase
+                  AND ${SQL_CANCELACION_ANULA_TEMPORAL_C2}
               )
             ORDER BY r.fecha_clase ASC, c.hora ASC
           `).bind(usuarioId).all();
@@ -896,6 +902,7 @@ async function isCupoCompleto(db: any, claseId: number, fechaISO: string): Promi
         WHERE c.usuario_id = r.usuario_id
           AND c.clase_id = r.clase_id
           AND c.fecha_clase = r.fecha_clase
+          AND ${SQL_CANCELACION_ANULA_TEMPORAL}
       )
   `).bind(claseId, fechaISO).first();
 
@@ -1447,6 +1454,7 @@ export async function POST(request: NextRequest) {
                     WHERE c.usuario_id = r.usuario_id
                       AND c.clase_id = r.clase_id
                       AND c.fecha_clase = r.fecha_clase
+                      AND ${SQL_CANCELACION_ANULA_TEMPORAL}
                   )
               `).bind(claseId, fechaClase).first();
 

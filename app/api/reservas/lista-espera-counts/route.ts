@@ -60,21 +60,55 @@ export async function POST(request: NextRequest) {
       counts[key] = 0;
     });
 
-    // Obtener conteos en batch usando GROUP BY
+    // Obtener conteos en batch usando IN por clase y fecha.
+    // Evita una cláusula OR gigante cuando vienen muchas combinaciones.
     try {
-      const placeholders: string[] = [];
+      const claseIds = Array.from(
+        new Set(
+          combinaciones
+            .map((c: any) => Number(c?.clase_id))
+            .filter((id: number) => Number.isFinite(id))
+        )
+      );
+      const fechas = Array.from(
+        new Set(
+          combinaciones
+            .map((c: any) => String(c?.fecha_clase || '').trim())
+            .filter((fecha: string) => fecha.length > 0)
+        )
+      );
+
+      if (claseIds.length === 0 || fechas.length === 0) {
+        return NextResponse.json({ counts });
+      }
+
+      const paresSolicitados: Array<{ clase_id: number; fecha_clase: string }> = combinaciones
+        .map((c: any) => ({
+          clase_id: Number(c?.clase_id),
+          fecha_clase: String(c?.fecha_clase || '').trim(),
+        }))
+        .filter((p) => Number.isFinite(p.clase_id) && p.fecha_clase.length > 0);
+
+      if (paresSolicitados.length === 0) {
+        return NextResponse.json({ counts });
+      }
+
+      const valuesPlaceholders = paresSolicitados.map(() => '(?, ?)').join(', ');
       const params: any[] = [];
-      
-      combinaciones.forEach((c: any) => {
-        placeholders.push('(clase_id = ? AND fecha_clase = ?)');
-        params.push(c.clase_id, c.fecha_clase);
+      paresSolicitados.forEach((p) => {
+        params.push(p.clase_id, p.fecha_clase);
       });
 
       const query = `
-        SELECT clase_id, fecha_clase, COUNT(*) as count
-        FROM lista_espera
-        WHERE ${placeholders.join(' OR ')}
-        GROUP BY clase_id, fecha_clase
+        WITH requested(clase_id, fecha_clase) AS (
+          VALUES ${valuesPlaceholders}
+        )
+        SELECT le.clase_id, le.fecha_clase, COUNT(*) as count
+        FROM lista_espera le
+        INNER JOIN requested r
+          ON le.clase_id = r.clase_id
+          AND le.fecha_clase = r.fecha_clase
+        GROUP BY le.clase_id, le.fecha_clase
       `;
 
       const result = await db.prepare(query).bind(...params).all();

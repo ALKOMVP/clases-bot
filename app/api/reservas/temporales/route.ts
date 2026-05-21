@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getMockDBInstance } from '@/lib/db-mock';
 import { createErrorResponse, getEnvironmentInfo } from '@/lib/error-handler';
+import { SQL_CANCELACION_ANULA_TEMPORAL } from '@/lib/cancelacion-filters';
 
 export async function GET(request: NextRequest) {
   const envInfo = getEnvironmentInfo();
@@ -54,6 +55,7 @@ export async function GET(request: NextRequest) {
           WHERE c.usuario_id = r.usuario_id
             AND c.clase_id = r.clase_id
             AND c.fecha_clase = r.fecha_clase
+            AND ${SQL_CANCELACION_ANULA_TEMPORAL}
         )
       ORDER BY r.fecha_clase DESC, r.created_at DESC
     `;

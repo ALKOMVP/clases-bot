@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getMockDBInstance } from '@/lib/db-mock';
 import { createErrorResponse, checkDatabaseAvailability, getEnvironmentInfo } from '@/lib/error-handler';
+import { SQL_CANCELACION_ANULA_TEMPORAL, SQL_CANCELACION_APLICA_A_RESERVA } from '@/lib/cancelacion-filters';
 
 // OpenNext no requiere runtime = 'edge' explícito
 
@@ -336,6 +337,7 @@ async function verificarYPromoverAutomaticamente(db: any, claseIdNum: number, fe
           WHERE c.usuario_id = r.usuario_id 
             AND c.clase_id = r.clase_id 
             AND c.fecha_clase = r.fecha_clase
+            AND ${SQL_CANCELACION_ANULA_TEMPORAL}
         )
     `).bind(claseIdNum, fechaClase).first();
     
@@ -513,6 +515,7 @@ async function promoverDeListaEspera(db: any, claseIdNum: number, fechaClase: st
           WHERE c.usuario_id = r.usuario_id 
             AND c.clase_id = r.clase_id 
             AND c.fecha_clase = r.fecha_clase
+            AND ${SQL_CANCELACION_ANULA_TEMPORAL}
         )
     `).bind(claseIdNum, fechaClase).first();
     
@@ -770,13 +773,13 @@ export async function GET(request: NextRequest) {
       conditions.push('(r.fecha_clase IS NULL OR r.fecha_clase = \'null\' OR r.fecha_clase = \'\' OR r.fecha_clase = ?)');
       params.push(fecha_clase);
       
-      // EXCLUIR reservas que tienen cancelación para esta fecha específica
-      // Aplica tanto a reservas fijas como temporales
+      // Fija: ocultar si cancelación fija (es_temporal=0). Temporal: solo si cancelación temporal.
       conditions.push(`NOT EXISTS (
         SELECT 1 FROM cancelacion c
         WHERE c.usuario_id = r.usuario_id 
           AND c.clase_id = r.clase_id 
           AND c.fecha_clase = ?
+          AND ${SQL_CANCELACION_APLICA_A_RESERVA}
       )`);
       params.push(fecha_clase);
     } else if (!include_reasignaciones) {

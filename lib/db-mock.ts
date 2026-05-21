@@ -83,6 +83,21 @@ function getMockData() {
   
   // No hay duplicados por email ya que eliminamos ese campo
   mockData.usuarios = usuariosNormalizados.filter((u: any) => u !== null);
+
+  // Normalización defensiva para desarrollo local:
+  // versiones anteriores podían guardar reservas temporales con fecha_clase
+  // pero es_reasignacion = 0. Eso hace que el front no las muestre como temporales.
+  mockData.reservas = (mockData.reservas || []).map((r: any) => {
+    const tieneFechaClase = r?.fecha_clase !== undefined &&
+      r?.fecha_clase !== null &&
+      r?.fecha_clase !== '' &&
+      r?.fecha_clase !== 'null';
+
+    if (tieneFechaClase && !(r?.es_reasignacion === 1 || r?.es_reasignacion === true)) {
+      return { ...r, es_reasignacion: 1 };
+    }
+    return r;
+  });
   
   return mockData;
 }
@@ -168,6 +183,57 @@ class MockDB {
                 // COUNT de reservas (sin filtros)
                 return { count: mockData.reservas.length };
               }
+              if (query.includes('FROM lista_espera')) {
+                let results = [...(mockData.lista_espera || [])];
+                if (query.includes('clase_id = ?') && params.length >= 1) {
+                  results = results.filter((r: any) => Number(r.clase_id) === Number(params[0]));
+                }
+                if (query.includes('fecha_clase = ?')) {
+                  const idx = query.indexOf('fecha_clase = ?');
+                  const paramIndex = (query.substring(0, idx).match(/\?/g) || []).length;
+                  if (paramIndex < params.length) {
+                    results = results.filter((r: any) => String(r.fecha_clase) === String(params[paramIndex]));
+                  }
+                }
+                return { count: results.length };
+              }
+            }
+
+            // Lista de espera (first)
+            if (query.includes('FROM lista_espera')) {
+              let results = [...(mockData.lista_espera || [])];
+
+              if (query.includes('WHERE usuario_id = ?') && query.includes('clase_id = ?') && query.includes('fecha_clase = ?') && params.length >= 3) {
+                const row = results.find(
+                  (r: any) =>
+                    Number(r.usuario_id) === Number(params[0]) &&
+                    Number(r.clase_id) === Number(params[1]) &&
+                    String(r.fecha_clase) === String(params[2])
+                );
+                return row || null;
+              }
+
+              if (query.includes('WHERE clase_id = ?') && query.includes('fecha_clase = ?') && params.length >= 2) {
+                results = results.filter(
+                  (r: any) => Number(r.clase_id) === Number(params[0]) && String(r.fecha_clase) === String(params[1])
+                );
+              }
+
+              if (query.includes('MAX(numero)')) {
+                const maxNum = results.reduce((acc: number, r: any) => Math.max(acc, Number(r.numero) || 0), 0);
+                return { max_num: maxNum };
+              }
+
+              if (query.includes('SELECT numero FROM lista_espera')) {
+                const first = results[0];
+                return first ? { numero: Number(first.numero) || 0 } : null;
+              }
+
+              if (query.includes('ORDER BY numero')) {
+                results.sort((a: any, b: any) => Number(a.numero || 0) - Number(b.numero || 0));
+              }
+
+              return results.length > 0 ? results[0] : null;
             }
             
             if (query.includes('SELECT') && query.includes('WHERE')) {
@@ -235,6 +301,37 @@ class MockDB {
           },
           all: async () => {
             const mockData = getMockData();
+            // Lista de espera
+            if (query.includes('FROM lista_espera')) {
+              let results = [...(mockData.lista_espera || [])];
+
+              if (query.includes('WHERE le.clase_id = ? AND le.fecha_clase = ?') || query.includes('WHERE clase_id = ? AND fecha_clase = ?')) {
+                if (params.length >= 2) {
+                  results = results.filter(
+                    (r: any) =>
+                      Number(r.clase_id) === Number(params[0]) &&
+                      String(r.fecha_clase) === String(params[1])
+                  );
+                }
+              }
+
+              if (query.includes('JOIN usuario')) {
+                results = results.map((r: any) => {
+                  const u = (mockData.usuarios || []).find((x: any) => Number(x.id) === Number(r.usuario_id));
+                  return {
+                    ...r,
+                    nombre: u?.nombre || '',
+                    apellido: u?.apellido || '',
+                  };
+                });
+              }
+
+              if (query.includes('ORDER BY') && query.includes('numero')) {
+                results.sort((a: any, b: any) => Number(a.numero || 0) - Number(b.numero || 0));
+              }
+
+              return { results };
+            }
             // Usuarios
             if (query.includes('FROM usuario')) {
               // Limpiar y normalizar datos existentes usando la función helper
@@ -611,6 +708,32 @@ class MockDB {
               mockData.clase_desactivada.push({ clase_id: claseId, fecha_clase: fechaClase });
               return { success: true, meta: { changes: 1 } };
             }
+            if (query.includes('INSERT INTO lista_espera')) {
+              if (!mockData.lista_espera) mockData.lista_espera = [];
+
+              const usuarioId = Number(params[0]);
+              const claseId = Number(params[1]);
+              const fechaClase = String(params[2]);
+              const numero = Number(params[3] ?? 0);
+
+              const exists = mockData.lista_espera.find((r: any) =>
+                Number(r.usuario_id) === usuarioId &&
+                Number(r.clase_id) === claseId &&
+                String(r.fecha_clase) === fechaClase
+              );
+              if (exists) {
+                return { success: true, meta: { changes: 0 } };
+              }
+
+              mockData.lista_espera.push({
+                usuario_id: usuarioId,
+                clase_id: claseId,
+                fecha_clase: fechaClase,
+                numero,
+                created_at: new Date().toISOString(),
+              });
+              return { success: true, meta: { changes: 1 } };
+            }
             if (query.includes('INSERT INTO reserva')) {
               // Detectar qué campos vienen en el INSERT
               // Puede ser:
@@ -623,10 +746,23 @@ class MockDB {
                 clase_id: Number(params[1])
               };
               
-              // Si hay fecha_clase (param[2]) y es_reasignacion (param[3]), es una reserva temporal
+              // Si hay fecha_clase (param[2]), puede ser temporal.
+              // En varios endpoints SQL se usa un literal en la query:
+              //   VALUES (?, ?, ?, 1, datetime('now'))
+              // En ese caso NO llega params[3], pero igual debe guardarse es_reasignacion = 1.
               if (params.length >= 3 && params[2] !== undefined && params[2] !== null && params[2] !== '') {
                 reserva.fecha_clase = params[2];
-                reserva.es_reasignacion = params.length >= 4 ? (params[3] === 1 || params[3] === true ? 1 : 0) : 0;
+                const hasLiteralTemporalFlag =
+                  query.includes('VALUES (?, ?, ?, 1, datetime(\'now\'))') ||
+                  query.includes('VALUES (?, ?, ?, 1') ||
+                  query.includes('es_reasignacion, created_at') ||
+                  query.includes('es_reasignacion');
+
+                if (params.length >= 4) {
+                  reserva.es_reasignacion = (params[3] === 1 || params[3] === true ? 1 : 0);
+                } else {
+                  reserva.es_reasignacion = hasLiteralTemporalFlag ? 1 : 0;
+                }
               } else {
                 // Reserva fija: sin fecha_clase y sin es_reasignacion (o 0)
                 reserva.fecha_clase = null;
@@ -804,6 +940,22 @@ class MockDB {
             if (query.includes('UPDATE reserva')) {
               // Similar para reservas
             }
+            if (query.includes('UPDATE lista_espera') && query.includes('SET numero = ?')) {
+              const numero = Number(params[0]);
+              const usuarioId = Number(params[1]);
+              const claseId = Number(params[2]);
+              const fechaClase = String(params[3]);
+              const row = (mockData.lista_espera || []).find((r: any) =>
+                Number(r.usuario_id) === usuarioId &&
+                Number(r.clase_id) === claseId &&
+                String(r.fecha_clase) === fechaClase
+              );
+              if (row) {
+                row.numero = numero;
+                return { success: true, meta: { changes: 1 } };
+              }
+              return { success: true, meta: { changes: 0 } };
+            }
             if (query.includes('DELETE FROM usuario')) {
               const beforeCount = mockData.usuarios.length;
               mockData.usuarios = mockData.usuarios.filter((u: any) => u.id !== parseInt(params[0]));
@@ -840,6 +992,37 @@ class MockDB {
                   changes: changes
                 }
               };
+            }
+            if (query.includes('DELETE FROM lista_espera')) {
+              if (!mockData.lista_espera) mockData.lista_espera = [];
+              const before = mockData.lista_espera.length;
+
+              if (query.includes('WHERE EXISTS') && params.length >= 2) {
+                const claseId = Number(params[0]);
+                const fechaClase = String(params[1]);
+                mockData.lista_espera = mockData.lista_espera.filter((le: any) => {
+                  const sameSlot = Number(le.clase_id) === claseId && String(le.fecha_clase) === fechaClase;
+                  if (!sameSlot) return true;
+                  const hasTemporal = (mockData.reservas || []).some((r: any) =>
+                    Number(r.usuario_id) === Number(le.usuario_id) &&
+                    Number(r.clase_id) === Number(le.clase_id) &&
+                    String(r.fecha_clase) === String(le.fecha_clase) &&
+                    (r.es_reasignacion === 1 || r.es_reasignacion === true)
+                  );
+                  return !hasTemporal;
+                });
+              } else if (params.length >= 3) {
+                const usuarioId = Number(params[0]);
+                const claseId = Number(params[1]);
+                const fechaClase = String(params[2]);
+                mockData.lista_espera = mockData.lista_espera.filter((le: any) =>
+                  !(Number(le.usuario_id) === usuarioId &&
+                    Number(le.clase_id) === claseId &&
+                    String(le.fecha_clase) === fechaClase)
+                );
+              }
+
+              return { success: true, meta: { changes: before - mockData.lista_espera.length } };
             }
             
             // Return por defecto si no se ejecutó ninguna operación

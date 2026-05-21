@@ -77,6 +77,7 @@ export default function CalendarioPage() {
   const [needsAutoFix, setNeedsAutoFix] = useState(false);
   const [isAutoFixing, setIsAutoFixing] = useState(false);
   const [hasCheckedAutoFix, setHasCheckedAutoFix] = useState(false);
+  const [hasLoadedInitialListaEsperaCounts, setHasLoadedInitialListaEsperaCounts] = useState(false);
   const [desactivadasPorFecha, setDesactivadasPorFecha] = useState<Array<{ clase_id: number; fecha_clase: string }>>([]);
 
   // Ctrl+D para mostrar botones de debug
@@ -110,11 +111,16 @@ export default function CalendarioPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [needsAutoFix, loading]);
 
-  // Detectar reservas sin fecha_clase solo una vez después de la carga inicial
+  // Detectar inconsistencias reales: temporales sin fecha_clase (las fijas sin fecha son válidas)
   useEffect(() => {
     if (!loading && !hasCheckedAutoFix && reservasAll.length > 0 && !needsAutoFix && !isAutoFixing) {
-      const hasReservasSinFecha = reservasAll.some(r => !r.fecha_clase || r.fecha_clase === 'null' || r.fecha_clase === null);
-      if (hasReservasSinFecha) {
+      const hasReservasTemporalesSinFecha = reservasAll.some(r => {
+        const esReasignacion = r.es_reasignacion === 1 || r.es_reasignacion === true || Number(r.es_reasignacion) === 1;
+        const tieneFecha = !!r.fecha_clase && r.fecha_clase !== 'null';
+        return esReasignacion && !tieneFecha;
+      });
+
+      if (hasReservasTemporalesSinFecha) {
         // Solo activar auto-fix una vez, después de un pequeño delay para evitar loops
         const timer = setTimeout(() => {
           if (!hasCheckedAutoFix) {
@@ -128,6 +134,15 @@ export default function CalendarioPage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading]);
+
+  // Cargar conteos iniciales una sola vez al terminar la carga de datos.
+  // Antes dependíamos de auto-fix y eso dejaba "calculando..." por más tiempo.
+  useEffect(() => {
+    if (loading || hasLoadedInitialListaEsperaCounts || clases.length === 0) return;
+    setHasLoadedInitialListaEsperaCounts(true);
+    loadListaEsperaCounts();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, clases.length, reservasAll.length, hasLoadedInitialListaEsperaCounts]);
 
   const loadUsuarios = async () => {
     try {
@@ -221,37 +236,40 @@ export default function CalendarioPage() {
   const loadListaEsperaCounts = async () => {
     if (clases.length === 0) return;
 
-    // OPTIMIZACIÓN: Solo cargar combinaciones para fechas que realmente tienen reservas temporales
-    // o que están en el calendario visible (próximos 30 días)
+    // OPTIMIZACIÓN:
+    // - incluir combinaciones reales desde reservas temporales existentes
+    // - incluir próximos 30 días, pero solo para clases que correspondan a ese día
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    const fechaSet = new Set<string>();
-    
-    // Incluir fechas de reservas temporales existentes (solo estas necesitan conteo de lista de espera)
+    const combinacionesSet = new Set<string>();
+
     reservasAll.forEach(r => {
-      if (r.fecha_clase && r.fecha_clase !== 'null' && r.fecha_clase !== null) {
-        fechaSet.add(r.fecha_clase);
+      const esReasignacion = r.es_reasignacion === 1 || r.es_reasignacion === true || Number(r.es_reasignacion) === 1;
+      if (esReasignacion && r.fecha_clase && r.fecha_clase !== 'null') {
+        combinacionesSet.add(`${r.clase_id}-${r.fecha_clase}`);
       }
     });
 
-    // Solo generar fechas para los próximos 30 días que corresponden a días de clases
-    // y que tienen reservas temporales o están próximas
-    const diaMap: { [key: number]: string } = { 1: 'Lun', 2: 'Mar', 4: 'Jue', 6: 'Sab' };
+    const diaClaseMap: { [key: string]: number } = { Lun: 1, Mar: 2, Jue: 4, Sab: 6 };
     for (let i = 0; i < 30; i++) {
       const fecha = new Date(today);
       fecha.setDate(today.getDate() + i);
-      const diaSemana = fecha.getDay();
-      if (diaMap[diaSemana]) {
-        fechaSet.add(fecha.toISOString().split('T')[0]);
-      }
+      const fechaStr = fecha.toISOString().split('T')[0];
+      const diaSemana = fecha.getDay(); // 0=Dom,1=Lun,2=Mar...
+
+      clases.forEach(clase => {
+        if (diaClaseMap[clase.dia] === diaSemana) {
+          combinacionesSet.add(`${clase.id}-${fechaStr}`);
+        }
+      });
     }
 
-    // Construir array de combinaciones SOLO para las clases y fechas relevantes
-    const combinaciones: Array<{ clase_id: number; fecha_clase: string }> = [];
-    clases.forEach(clase => {
-      fechaSet.forEach(fecha => {
-        combinaciones.push({ clase_id: clase.id, fecha_clase: fecha });
-      });
+    const combinaciones: Array<{ clase_id: number; fecha_clase: string }> = Array.from(combinacionesSet).map((key) => {
+      const [claseId, ...fechaParts] = key.split('-');
+      return {
+        clase_id: Number(claseId),
+        fecha_clase: fechaParts.join('-'),
+      };
     });
 
     if (combinaciones.length === 0) {
@@ -412,12 +430,22 @@ export default function CalendarioPage() {
     return dias[dia] || dia;
   };
 
-  // Pre-indexar cancelaciones para búsquedas O(1) en lugar de O(n)
-  const cancelacionesIndex = useMemo(() => {
+  // Cancelación fija (es_temporal=0) oculta al fijo ese día; cancelación temporal solo oculta la temporal.
+  const cancelacionesFijasIndex = useMemo(() => {
     const index = new Set<string>();
     cancelaciones.forEach(c => {
-      const key = `${c.usuario_id}_${c.clase_id}_${c.fecha_clase}`;
-      index.add(key);
+      if (c.es_temporal === 1 || c.es_temporal === true) return;
+      index.add(`${c.usuario_id}_${c.clase_id}_${c.fecha_clase}`);
+    });
+    return index;
+  }, [cancelaciones]);
+
+  const cancelacionesTemporalesIndex = useMemo(() => {
+    const index = new Set<string>();
+    cancelaciones.forEach(c => {
+      if (c.es_temporal === 1 || c.es_temporal === true) {
+        index.add(`${c.usuario_id}_${c.clase_id}_${c.fecha_clase}`);
+      }
     });
     return index;
   }, [cancelaciones]);
@@ -487,7 +515,7 @@ export default function CalendarioPage() {
             const reservasFijasFiltradas: Reserva[] = [];
             for (const r of reservasFijasRaw) {
               const cancelKey = `${r.usuario_id}_${claseId}_${fechaStr}`;
-              if (!cancelacionesIndex.has(cancelKey)) {
+              if (!cancelacionesFijasIndex.has(cancelKey)) {
                 reservasFijasFiltradas.push(r);
               }
             }
@@ -495,7 +523,7 @@ export default function CalendarioPage() {
             const reservasTemporalesFiltradas: Reserva[] = [];
             for (const r of reservasTemporalesRaw) {
               const cancelKey = `${r.usuario_id}_${claseId}_${fechaStr}`;
-              if (!cancelacionesIndex.has(cancelKey)) {
+              if (!cancelacionesTemporalesIndex.has(cancelKey)) {
                 reservasTemporalesFiltradas.push(r);
               }
             }
@@ -534,7 +562,7 @@ export default function CalendarioPage() {
     }
 
     return calendar;
-  }, [clases, reservasIndex, cancelacionesIndex, refreshCounter]);
+  }, [clases, reservasIndex, cancelacionesFijasIndex, cancelacionesTemporalesIndex, refreshCounter]);
 
   // Cargar lista de espera counts de forma lazy cuando se renderizan las cards
   useEffect(() => {
@@ -779,11 +807,12 @@ export default function CalendarioPage() {
       
       if (!esReasignacion || !fechaCoincide) return false;
       
-      // CRÍTICO: Excluir temporales que están cancelados
+      // Excluir solo si la cancelación es de la reserva temporal (es_temporal=1), no la fija del día
       const cancelada = cancelaciones.some(cancel => 
         Number(cancel.usuario_id) === Number(r.usuario_id) && 
         Number(cancel.clase_id) === Number(r.clase_id) && 
-        cancel.fecha_clase === fechaStr
+        cancel.fecha_clase === fechaStr &&
+        (cancel.es_temporal === 1 || cancel.es_temporal === true)
       );
       
       if (cancelada) {
@@ -824,11 +853,12 @@ export default function CalendarioPage() {
       // Debe ser una reserva fija (sin fecha_clase y sin es_reasignacion)
       if (esReasignacion || tieneFecha) return false;
       
-      // Excluir si tiene cancelación para esta fecha específica
+      // Excluir si tiene cancelación fija para esta fecha (es_temporal=0)
       const tieneCancelacion = cancelaciones.some(c => 
         Number(c.usuario_id) === Number(r.usuario_id) && 
         Number(c.clase_id) === Number(r.clase_id) && 
-        c.fecha_clase === fechaStr
+        c.fecha_clase === fechaStr &&
+        !(c.es_temporal === 1 || c.es_temporal === true)
       );
       
       if (tieneCancelacion) {
@@ -1531,7 +1561,7 @@ export default function CalendarioPage() {
                         const listaEsperaCount = listaEsperaCounts.get(key);
                         // Mostrar "calculando..." solo si hay temporales pero no tenemos el count aún
                         const tieneTemporales = reservasTemporales.length > 0 || (listaEsperaCount !== undefined && listaEsperaCount > 0);
-                        const isCalculando = reservasTemporales.length > 0 && listaEsperaCount === undefined;
+                        const isCalculandoListaEspera = listaEsperaCount === undefined;
 
                         return (
                           <button
@@ -1580,7 +1610,7 @@ export default function CalendarioPage() {
                             <div className="text-sm text-gray-600 mb-2">{c.clase.hora}</div>
                             <div className="text-xs text-gray-500 space-y-1">
                               <div>
-                                {isAutoFixing || isCalculando ? (
+                                {isAutoFixing ? (
                                   <div className="inline-flex items-center gap-2">
                                     <div className="h-4 w-16 bg-gray-200 rounded animate-pulse"></div>
                                     <span className="text-gray-400">calculando...</span>
@@ -1591,7 +1621,7 @@ export default function CalendarioPage() {
                                   </>
                                 )}
                               </div>
-                              {isAutoFixing || isCalculando ? (
+                              {isAutoFixing ? (
                                 <div className="h-3 w-24 bg-gray-200 rounded animate-pulse"></div>
                               ) : (
                                 <>
@@ -1599,6 +1629,9 @@ export default function CalendarioPage() {
                                     <div className="text-green-700 font-semibold">
                                       {reservasTemporales.length} temporal{reservasTemporales.length > 1 ? 'es' : ''} confirmado{reservasTemporales.length > 1 ? 's' : ''}
                                     </div>
+                                  )}
+                                  {isCalculandoListaEspera && reservasTemporales.length > 0 && (
+                                    <div className="text-gray-400">actualizando lista de espera...</div>
                                   )}
                                   {listaEsperaCount !== undefined && listaEsperaCount > 0 && (
                                     <div className="text-amber-600 font-semibold">
